@@ -1,0 +1,14 @@
+Index: .gitignore
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>.env\r\nvenv/\r\ndata/
+===================================================================
+diff --git a/.gitignore b/.gitignore
+--- a/.gitignore	(revision 1c8f9dd7da8ac01886b593c7720c7f783d197f20)
++++ b/.gitignore	(date 1762903509993)
+@@ -1,3 +1,4 @@
+ .env
++.idea
+ venv/
+ data/
+\ No newline at end of file

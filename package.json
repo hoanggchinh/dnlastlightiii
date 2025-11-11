@@ -1,0 +1,14 @@
+{
+  "name": "rag-chatbot-do-an",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@google/generative-ai": "^0.15.0",
+    "@langchain/community": "^0.2.19",
+    "@langchain/google-genai": "^0.0.22",
+    "@langchain/pinecone": "^0.0.8",
+    "@pinecone-database/pinecone": "^2.2.2",
+    "langchain": "^0.2.10",
+    "langchain-core": "^0.2.19"
+  }
+}
