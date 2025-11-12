@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2c71b5ec-cbfa-41e0-b493-a049b68c859a" name="Changes" comment="up 1st file">
-      <change beforePath="$PROJECT_DIR$/api/ask.js" beforeDir="false" afterPath="$PROJECT_DIR$/api/ask.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/script.js" beforeDir="false" afterPath="$PROJECT_DIR$/script.js" afterDir="false" />
-    </list>
+    <list default="true" id="2c71b5ec-cbfa-41e0-b493-a049b68c859a" name="Changes" comment="up 1st file" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -228,7 +224,7 @@
       <workItem from="1762900962265" duration="314000" />
       <workItem from="1762901285862" duration="2144000" />
       <workItem from="1762903458749" duration="1303000" />
-      <workItem from="1762904784560" duration="421000" />
+      <workItem from="1762904784560" duration="1079000" />
     </task>
     <task id="LOCAL-00001" summary="up 1st file">
       <option name="closed" value="true" />
