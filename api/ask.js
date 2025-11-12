@@ -85,7 +85,10 @@ CÂU TRẢ LỜI (bằng tiếng Việt):
         const ragChain = RunnableSequence.from([
             {
                 // Lấy context: Dùng retriever tìm doc, sau đó format lại
-                context: retriever.pipe(formatContext),
+                context: async (input) => {
+                    const docs = await retriever.invoke(input.question);
+                    return formatContext(docs);
+                },
                 // Giữ nguyên câu hỏi
                 question: (input) => input.question,
             },
@@ -94,13 +97,23 @@ CÂU TRẢ LỜI (bằng tiếng Việt):
             new StringOutputParser(), // Lấy kết quả dạng text
         ]);
 
-        // 6. Thực thi chuỗi và trả về kết quả
-        console.log("Đang thực thi RAG chain...");
-        const answer = await ragChain.invoke({ question: question });
+        // 6. Thực thi: Tìm kiếm và tạo câu trả lời
+        console.log("Đang tìm kiếm tài liệu liên quan...");
+
+        // Bước 1: Tìm kiếm documents
+        const relevantDocs = await retriever.invoke(question);
+        const context = formatContext(relevantDocs);
+
+        console.log("Đã tìm thấy", relevantDocs.length, "tài liệu. Đang tạo câu trả lời...");
+
+        // Bước 2: Tạo câu trả lời
+        const prompt = await promptTemplate.format({ context, question });
+        const answer = await model.invoke(prompt);
+
         console.log("Đã có câu trả lời.");
 
         // Gửi câu trả lời về cho frontend
-        res.status(200).json({ answer: answer });
+        res.status(200).json({ answer: answer.content });
 
     } catch (error) {
         console.error(error);
