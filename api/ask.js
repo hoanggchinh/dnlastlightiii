@@ -9,15 +9,6 @@ const PINECONE_INDEX_NAME = "rag-do-an";
 
 // Hàm handler chính của Vercel
 module.exports = async (req, res) => {
-    // Xử lý CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
     // Chỉ cho phép phương thức POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
@@ -26,8 +17,8 @@ module.exports = async (req, res) => {
     try {
         // 1. Lấy câu hỏi từ body của request
         const { question } = req.body;
-        if (!question || question.trim() === '') {
-            return res.status(400).json({ error: "Question is required and cannot be empty" });
+        if (!question || typeof question !== 'string') {
+            return res.status(400).json({ error: "Question is required and must be a string" });
         }
 
         // 2. Lấy API keys từ Biến Môi Trường của Vercel
@@ -35,13 +26,16 @@ module.exports = async (req, res) => {
         const pineconeApiKey = process.env.PINECONE_API_KEY;
 
         if (!googleApiKey || !pineconeApiKey) {
-            console.error("[ERROR] Missing API keys");
+            console.error("Missing API keys:", {
+                hasGemini: !!googleApiKey,
+                hasPinecone: !!pineconeApiKey
+            });
             return res.status(500).json({
                 error: "API keys not configured (GEMINI_API_KEY or PINECONE_API_KEY missing)"
             });
         }
 
-        console.log("[INFO] Initializing services...");
+        console.log("Initializing services...");
 
         // 3. Khởi tạo các dịch vụ
         const pinecone = new Pinecone({ apiKey: pineconeApiKey });
@@ -57,7 +51,7 @@ module.exports = async (req, res) => {
         });
 
         const model = new ChatGoogleGenerativeAI({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             apiKey: googleApiKey,
             temperature: 0.3,
         });
@@ -79,54 +73,55 @@ CÂU HỎI:
 CÂU TRẢ LỜI (bằng tiếng Việt):
         `);
 
-        // 5. Thực thi RAG
-        console.log("[INFO] Searching for relevant documents...");
+        // 5. Tìm kiếm và tạo câu trả lời
+        console.log("Searching for relevant documents...");
 
+        // Tìm kiếm 4 documents liên quan nhất
         const retriever = vectorStore.asRetriever(4);
         const relevantDocs = await retriever.invoke(question);
 
-        // Kiểm tra nếu không tìm thấy documents
-        if (!relevantDocs || relevantDocs.length === 0) {
-            console.log("[INFO] No relevant documents found");
-            return res.status(200).json({
-                answer: "Xin lỗi, tôi không tìm thấy thông tin liên quan trong tài liệu của trường."
-            });
-        }
+        console.log(`Found ${relevantDocs.length} relevant documents`);
 
-        const formatContext = (docs) => docs.map((doc) => doc.pageContent).join("\n\n");
-        const context = formatContext(relevantDocs);
+        // Kết hợp nội dung các documents thành context
+        const context = relevantDocs
+            .map((doc) => doc.pageContent)
+            .join("\n\n");
 
-        console.log(`[INFO] Found ${relevantDocs.length} relevant documents. Generating answer...`);
-
-        // 6. Tạo câu trả lời
+        // Tạo prompt với context và question
         const prompt = await promptTemplate.format({ context, question });
+
+        console.log("Generating answer...");
+
+        // Gọi model để tạo câu trả lời
         const response = await model.invoke(prompt);
 
-        // Xử lý response an toàn
-        let answerText;
-        if (typeof response === 'string') {
-            answerText = response;
-        } else if (response.content) {
-            answerText = response.content;
-        } else if (response.text) {
-            answerText = response.text;
-        } else {
-            console.error("[ERROR] Unexpected response format:", response);
-            answerText = "Xin lỗi, đã xảy ra lỗi khi tạo câu trả lời.";
-        }
+        // Lấy nội dung text từ response
+        const answer = typeof response === 'string'
+            ? response
+            : response.content || response.text || String(response);
 
-        console.log("[INFO] Answer generated successfully");
+        console.log("Answer generated successfully");
 
         // Gửi câu trả lời về cho frontend
-        res.status(200).json({ answer: answerText });
+        res.status(200).json({
+            answer: answer,
+            // Optional: trả về metadata để debug (có thể bỏ)
+            metadata: {
+                documentsFound: relevantDocs.length
+            }
+        });
 
     } catch (error) {
-        console.error("[ERROR] Processing request:", error.message);
-        console.error("[ERROR] Stack trace:", error.stack);
+        console.error("Error processing request:", error);
+
+        // Trả về lỗi chi tiết hơn
+        const errorMessage = error.message || "Unknown error occurred";
+        const errorType = error.constructor.name;
 
         res.status(500).json({
             error: "An error occurred while processing your request",
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            details: errorMessage,
+            type: errorType
         });
     }
 };
