@@ -718,13 +718,10 @@
 
         const chatHTML = `
             <div class="chat-container-terminal">
-                <div class="chat-header">Trợ Lý Thông Minh (RAG Chatbot)</div>
+                <div class="chat-header">ChatUIA</div>
                 <div class="chat-box" id="chat-box-${uniqueId}">
-                    <div class="message bot-message">Chào bạn! Tôi là trợ lý AI, tôi có thể trả lời các câu hỏi về tài liệu nội bộ của trường. Hãy hỏi tôi nhé!</div>
-                    <div class="message bot-message" style="background: #fffbe6; color: #573a00; border: 1px solid #ffde7a;">
-                        <b>Lưu ý:</b> Logic chatbot đã được nhúng. Tuy nhiên, nó đang cố gắng kết nối đến <code>/api/ask</code>.
-                        Nếu bạn chưa thiết lập máy chủ (ví dụ: Vercel hoặc Live Server với proxy), nó sẽ báo lỗi kết nối trong Console.
-                    </div>
+                    <div class="message bot-message">Chào bạn! Tôi là trợ lý AI, tôi có thể trả lời các câu hỏi xoay quanh vấn đề học tập của TNUT. Hãy hỏi tôi nhé!</div>
+
                 </div>
                 <div class="chat-input-container">
                     <input type="text" id="chat-input-${uniqueId}" class="chat-input-terminal" placeholder="Nhập câu hỏi của bạn...">
@@ -771,7 +768,7 @@
             sendBtn.prop('disabled', true); // Vô hiệu hóa nút Gửi
 
             // 2. Hiển thị trạng thái đang gõ
-            const typingIndicator = displayMessage('Bot đang gõ...', 'bot');
+            const typingIndicator = displayMessage('Overthinking... ', 'bot');
             typingIndicator.addClass('typing-indicator');
 
             try {
@@ -802,7 +799,7 @@
                 // 4. Xóa trạng thái đang gõ
                 typingIndicator.remove();
                 // 5. Hiển thị lỗi
-                displayMessage('Xin lỗi, đã xảy ra lỗi kết nối hoặc lỗi server. Vui lòng kiểm tra Console (F12) để biết chi tiết.', 'bot');
+                displayMessage('Xin lỗi, đã xảy ra lỗi kết nối hoặc lỗi server. Vui lòng liên hệ dev :D', 'bot');
             } finally {
                 sendBtn.prop('disabled', false); // Kích hoạt lại nút Gửi
             }
