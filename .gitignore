@@ -4,6 +4,6 @@ __pycache__/
 *.pyc
 .env
 data/
-.idea
+.idea/
 # NodeJS
 node_modules/

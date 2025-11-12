@@ -1,7 +1,6 @@
 // Import các thư viện cần thiết
 // quan trọng: đây là cú pháp "require" của Node.js, không phải "import"
 const { Pinecone } = require("@pinecone-database/pinecone");
-const { LangChainStream, StreamingTextResponse } = require("langchain/streaming");
 const { PineconeStore } = require("@langchain/pinecone");
 const { GoogleGenerativeAiEmbeddings, ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { PromptTemplate } = require("@langchain/core/prompts");
@@ -49,7 +48,7 @@ module.exports = async (req, res) => {
             pineconeIndex,
         });
 
-        // KhởiG-tạo_model_Chat (Gemini)
+        // Khởi tạo model Chat (Gemini)
         const model = new ChatGoogleGenerativeAI({
             model: "gemini-1.5-flash",
             apiKey: googleApiKey,
