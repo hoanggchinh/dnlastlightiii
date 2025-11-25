@@ -19,78 +19,67 @@ module.exports = async (req, res) => {
     }
 
     try {
+        // --- LOG 1: KIỂM TRA INPUT ---
+        console.log('1. Bắt đầu xử lý request...');
         const { question } = req.body;
+        console.log(`2. Câu hỏi nhận được: "${question}"`);
 
         // Validate input
         if (!question || typeof question !== 'string') {
+            console.error("Lỗi: Câu hỏi rỗng hoặc không hợp lệ.");
             return res.status(400).json({ error: "Câu hỏi không hợp lệ." });
         }
 
-        // Lấy API Key
-        const googleApiKey = process.env.GEMINI_API_KEY;
+        // --- 1. LẤY API KEY VÀ KHỞI TẠO CÁC THÀNH PHẦN ---
+        // Lấy API Key từ Environment Variables
         const pineconeApiKey = process.env.PINECONE_API_KEY;
+        const googleApiKey = process.env.GEMINI_API_KEY;
         const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
-        if (!googleApiKey || !pineconeApiKey || !anthropicApiKey) {
-            return res.status(500).json({ error: "Missing API key" });
+        if (!pineconeApiKey || !googleApiKey || !anthropicApiKey) {
+            console.error("Lỗi: Thiếu một hoặc nhiều API Key trong Environment Variables.");
+            return res.status(500).json({ error: "Lỗi cấu hình server (Thiếu API Key)." });
         }
 
-        // --- 1. KẾT NỐI DB & TÌM KIẾM ---
-
-        // Khởi tạo Embedding (Phải khớp model với file ingest.py)
-        const embeddings = new GoogleGenerativeAIEmbeddings({
-            model: "models/text-embedding-004",
-            apiKey: googleApiKey,
-        });
-
-        // Kết nối Pinecone
         const pinecone = new Pinecone({ apiKey: pineconeApiKey });
-        const index = pinecone.Index(PINECONE_INDEX_NAME);
+        const pineconeIndex = pinecone.Index(PINECONE_INDEX_NAME);
 
-        const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-            pineconeIndex: index,
+        const embeddings = new GoogleGenerativeAIEmbeddings({
+            apiKey: googleApiKey,
+            model: "embedding-001",
         });
 
-        // Tìm kiếm vector (Similarity Search)
-        // Kỹ thuật: Chỉ lấy Top 4 để tiết kiệm token nhưng vẫn đủ thông tin
+        const model = new ChatAnthropic({
+            apiKey: anthropicApiKey,
+            model: MODEL_NAME,
+        });
+
+        // --- LOG 2: KIỂM TRA KHỞI TẠO ---
+        console.log('3. Khởi tạo Pinecone, Embeddings và Model thành công.');
+
+
+        // --- 2. TÌM KIẾM TÀI LIỆU LIÊN QUAN (RAG) ---
+        const vectorStore = new PineconeStore(embeddings, { pineconeIndex });
+
         const results = await vectorStore.similaritySearch(question, TOP_K);
 
-        // --- 2. XỬ LÝ CONTEXT (TIẾT KIỆM TOKEN) ---
+        // --- LOG 3: KIỂM TRA KẾT QUẢ TÌM KIẾM ---
+        console.log(`4. Đã tìm thấy ${results.length} tài liệu liên quan.`);
 
-        let contextData = "";
-        let currentLength = 0;
 
-        for (const doc of results) {
-            // Xử lý text: Xóa bớt xuống dòng thừa, khoảng trắng thừa để tiết kiệm token
-            const cleanContent = doc.pageContent.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+        // Ghép nội dung context từ các tài liệu tìm được
+        let contextData = results
+            .map(doc => doc.pageContent)
+            .join("\n---\n")
+            .substring(0, MAX_CONTEXT_LENGTH); // Cắt bớt nếu quá dài
 
-            // Kiểm tra giới hạn độ dài
-            if (currentLength + cleanContent.length < MAX_CONTEXT_LENGTH) {
-                // Thêm thẻ XML <doc> để Claude hiểu rõ đây là tài liệu tham khảo
-                contextData += `<doc>\n${cleanContent}\n</doc>\n`;
-                currentLength += cleanContent.length;
-            } else {
-                break; // Đã đủ thông tin, dừng lại để không tốn thêm tiền
-            }
-        }
+        // --- LOG 4: KIỂM TRA CONTEXT TRUYỀN VÀO AI ---
+        console.log(`5. Kích thước Context Data được truyền vào AI: ${contextData.length} ký tự.`);
+        // console.log(`Chi tiết Context Data: \n${contextData}`); // Chỉ mở khi cần debug sâu
 
-        if (!contextData) {
-            return res.status(200).json({ answer: "Xin lỗi, tôi không tìm thấy thông tin nào trong tài liệu liên quan đến câu hỏi của bạn." });
-        }
 
-        // --- 3. PROMPT ENGINEERING (NÂNG CẤP) ---
-
-        // Model Config
-        const model = new ChatAnthropic({
-            modelName: MODEL_NAME,
-            apiKey: anthropicApiKey,
-            temperature: 0.3, // Thấp để trả lời chính xác theo tài liệu
-            maxTokens: 1024,  // Tăng lên để tránh bị cắt giữa chừng (quan trọng!)
-        });
-
-        // Template thông minh: Sử dụng kỹ thuật "Role-playing" và "Format instruction"
-        const template = `
-Bạn là một trợ lý AI hỗ trợ sinh viên, nhiệt tình và am hiểu quy chế của Trường Đại học Kỹ thuật Công nghiệp - Đại học Thái Nguyên
+        // --- 3. XÂY DỰNG PROMPT ---
+        const template = `Bạn là một trợ lý AI hỗ trợ sinh viên, nhiệt tình và am hiểu quy chế của Trường Đại học Kỹ thuật Công nghiệp - Đại học Thái Nguyên
 Nhiệm vụ của bạn là trả lời câu hỏi dựa trên thông tin được cung cấp trong thẻ <context>.
 
 <context>
@@ -121,15 +110,24 @@ Câu trả lời:`;
             question: question
         });
 
+        // --- LOG 5: KIỂM TRA CÂU TRẢ LỜI CUỐI CÙNG ---
+        console.log(`6. AI đã trả lời thành công. Kích thước câu trả lời: ${response.length} ký tự.`);
+
+
         // Trả về JSON
         return res.status(200).json({
             answer: response,
-            // (Optional) Trả về sources để debug xem nó lấy tin từ đâu
-            // sources: results.map(r => r.metadata.source || "unknown")
+            // (Optional) Trả về sources để...
         });
 
     } catch (error) {
-        console.error("Lỗi xử lý:", error);
-        return res.status(500).json({ error: "Đã có lỗi xảy ra khi xử lý câu hỏi." });
+        // --- LOG CUỐI CÙNG: LOG LỖI SERVER ---
+        console.error('7. LỖI SERVER XẢY RA: ', error);
+        // Kiểm tra xem lỗi có phải do Environment Variables không
+        if (error.message && (error.message.includes('API_KEY') || error.message.includes('Auth'))) {
+             return res.status(500).json({ error: "Lỗi xác thực API. Vui lòng kiểm tra lại API Key trên Vercel." });
+        }
+
+        return res.status(500).json({ error: "Lỗi Server nội bộ không xác định." });
     }
 };
