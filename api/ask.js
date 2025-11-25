@@ -1,127 +1,135 @@
-// Import các thư viện cần thiết
+// Import thư viện
 const { Pinecone } = require("@pinecone-database/pinecone");
 const { PineconeStore } = require("@langchain/pinecone");
-const { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } = require("@langchain/google-genai");
+const { GoogleGenerativeAIEmbeddings } = require("@langchain/google-genai");
+const { ChatAnthropic } = require("@langchain/anthropic");
 const { PromptTemplate } = require("@langchain/core/prompts");
+const { StringOutputParser } = require("@langchain/core/output_parsers");
 
-// Cấu hình: Tên Index Pinecone của bạn
+
 const PINECONE_INDEX_NAME = "rag-do-an";
+const MODEL_NAME = "claude-4-5-haiku-20241022"; // Model mới nhất, rẻ, thông minh
+const MAX_CONTEXT_LENGTH = 6000; // Giới hạn ký tự context (khoảng 1500 tokens) để tiết kiệm tiền
+const TOP_K = 4; // Chỉ lấy 4 đoạn liên quan nhất (thay vì 5-10 gây nhiễu và tốn tiền)
 
-// Hàm handler chính của Vercel
 module.exports = async (req, res) => {
-    // Chỉ cho phép phương thức POST
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
     }
 
     try {
-        // 1. Lấy câu hỏi từ body của request
         const { question } = req.body;
+
+        // Validate input
         if (!question || typeof question !== 'string') {
-            return res.status(400).json({ error: "Question is required and must be a string" });
+            return res.status(400).json({ error: "Câu hỏi không hợp lệ." });
         }
 
-        // 2. Lấy API keys từ Biến Môi Trường của Vercel
+        // Lấy API Key
         const googleApiKey = process.env.GEMINI_API_KEY;
         const pineconeApiKey = process.env.PINECONE_API_KEY;
+        const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
-        if (!googleApiKey || !pineconeApiKey) {
-            console.error("Missing API keys:", {
-                hasGemini: !!googleApiKey,
-                hasPinecone: !!pineconeApiKey
-            });
-            return res.status(500).json({
-                error: "API keys not configured (GEMINI_API_KEY or PINECONE_API_KEY missing)"
-            });
+        if (!googleApiKey || !pineconeApiKey || !anthropicApiKey) {
+            return res.status(500).json({ error: "Missing API key" });
         }
 
-        console.log("Initializing services...");
+        // --- 1. KẾT NỐI DB & TÌM KIẾM ---
 
-        // 3. Khởi tạo các dịch vụ
-        const pinecone = new Pinecone({ apiKey: pineconeApiKey });
-        const pineconeIndex = pinecone.Index(PINECONE_INDEX_NAME);
-
+        // Khởi tạo Embedding (Phải khớp model với file ingest.py)
         const embeddings = new GoogleGenerativeAIEmbeddings({
             model: "models/text-embedding-004",
             apiKey: googleApiKey,
         });
 
+        // Kết nối Pinecone
+        const pinecone = new Pinecone({ apiKey: pineconeApiKey });
+        const index = pinecone.Index(PINECONE_INDEX_NAME);
+
         const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-            pineconeIndex,
+            pineconeIndex: index,
         });
 
-        const model = new ChatGoogleGenerativeAI({
-            model: "gemini-2.5-flash",
-            apiKey: googleApiKey,
-            temperature: 0.3,
-        });
+        // Tìm kiếm vector (Similarity Search)
+        // Kỹ thuật: Chỉ lấy Top 4 để tiết kiệm token nhưng vẫn đủ thông tin
+        const results = await vectorStore.similaritySearch(question, TOP_K);
 
-        // 4. Tạo Prompt Template
-        const promptTemplate = PromptTemplate.fromTemplate(`
-Bạn là một trợ lý AI hữu ích của trường đại học.
-Nhiệm vụ của bạn là trả lời câu hỏi của sinh viên dựa trên các tài liệu nội bộ của trường.
-Chỉ sử dụng thông tin từ "NGỮ CẢNH" được cung cấp.
-Nếu "NGỮ CẢNH" không chứa thông tin để trả lời, hãy nói: "Xin lỗi, tôi không tìm thấy thông tin này trong tài liệu."
-Không được bịa đặt thông tin.
+        // --- 2. XỬ LÝ CONTEXT (TIẾT KIỆM TOKEN) ---
 
-NGỮ CẢNH:
-{context}
+        let contextData = "";
+        let currentLength = 0;
 
-CÂU HỎI:
-{question}
+        for (const doc of results) {
+            // Xử lý text: Xóa bớt xuống dòng thừa, khoảng trắng thừa để tiết kiệm token
+            const cleanContent = doc.pageContent.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
 
-CÂU TRẢ LỜI (bằng tiếng Việt):
-        `);
-
-        // 5. Tìm kiếm và tạo câu trả lời
-        console.log("Searching for relevant documents...");
-
-        // Tìm kiếm 10 documents liên quan nhất (tăng từ 4 lên 10)
-        const retriever = vectorStore.asRetriever(10);
-        const relevantDocs = await retriever.invoke(question);
-
-        console.log(`Found ${relevantDocs.length} relevant documents`);
-
-        // Kết hợp nội dung các documents thành context
-        const context = relevantDocs
-            .map((doc) => doc.pageContent)
-            .join("\n\n");
-
-        // Tạo prompt với context và question
-        const prompt = await promptTemplate.format({ context, question });
-
-        console.log("Generating answer...");
-
-        // Gọi model để tạo câu trả lời
-        const response = await model.invoke(prompt);
-
-        // Lấy nội dung text từ response
-        const answer = typeof response === 'string'
-            ? response
-            : response.content || response.text || String(response);
-
-        console.log("Answer generated successfully");
-
-        // Gửi câu trả lời về cho frontend
-        res.status(200).json({
-            answer: answer,
-            // Optional: trả về metadata để debug (có thể bỏ)
-            metadata: {
-                documentsFound: relevantDocs.length
+            // Kiểm tra giới hạn độ dài
+            if (currentLength + cleanContent.length < MAX_CONTEXT_LENGTH) {
+                // Thêm thẻ XML <doc> để Claude hiểu rõ đây là tài liệu tham khảo
+                contextData += `<doc>\n${cleanContent}\n</doc>\n`;
+                currentLength += cleanContent.length;
+            } else {
+                break; // Đã đủ thông tin, dừng lại để không tốn thêm tiền
             }
+        }
+
+        if (!contextData) {
+            return res.status(200).json({ answer: "Xin lỗi, tôi không tìm thấy thông tin nào trong tài liệu liên quan đến câu hỏi của bạn." });
+        }
+
+        // --- 3. PROMPT ENGINEERING (NÂNG CẤP) ---
+
+        // Model Config
+        const model = new ChatAnthropic({
+            modelName: MODEL_NAME,
+            apiKey: anthropicApiKey,
+            temperature: 0.3, // Thấp để trả lời chính xác theo tài liệu
+            maxTokens: 1024,  // Tăng lên để tránh bị cắt giữa chừng (quan trọng!)
+        });
+
+        // Template thông minh: Sử dụng kỹ thuật "Role-playing" và "Format instruction"
+        const template = `
+Bạn là một trợ lý AI hỗ trợ sinh viên, nhiệt tình và am hiểu quy chế.
+Nhiệm vụ của bạn là trả lời câu hỏi dựa trên thông tin được cung cấp trong thẻ <context>.
+
+<context>
+{context}
+</context>
+
+Câu hỏi của sinh viên: "{question}"
+
+Yêu cầu trả lời:
+1. CHỈ sử dụng thông tin trong <context> để trả lời. Không bịa đặt.
+2. Nếu không có thông tin, hãy nói "Tài liệu không đề cập đến vấn đề này".
+3. Trình bày câu trả lời rõ ràng, đẹp mắt bằng Markdown:
+   - Sử dụng **in đậm** cho các ý chính.
+   - Sử dụng gạch đầu dòng (-) cho các danh sách.
+   - Chia đoạn văn hợp lý, không viết dính liền một khối.
+4. Giọng văn thân thiện, ngắn gọn, súc tích (đừng dài dòng lê thê).
+
+Câu trả lời:`;
+
+        const prompt = PromptTemplate.fromTemplate(template);
+
+        // --- 4. GỌI AI & TRẢ VỀ KẾT QUẢ ---
+
+        const chain = prompt.pipe(model).pipe(new StringOutputParser());
+
+        const response = await chain.invoke({
+            context: contextData,
+            question: question
+        });
+
+        // Trả về JSON
+        return res.status(200).json({
+            answer: response,
+            // (Optional) Trả về sources để debug xem nó lấy tin từ đâu
+            // sources: results.map(r => r.metadata.source || "unknown")
         });
 
     } catch (error) {
-        console.error("Error processing request:", error);
-
-        // Trả về lỗi chi tiết hơn
-        const errorMessage = error.message || "Unknown error occurred";
-        const errorType = error.constructor.name;
-
-        res.status(500).json({
-            error: "An error occurred while processing your request",
-            details: errorMessage,
-            type: errorType
-        });
+        console.error("Lỗi xử lý:", error);
+        return res.status(500).json({ error: "Đã có lỗi xảy ra khi xử lý câu hỏi." });
     }
 };

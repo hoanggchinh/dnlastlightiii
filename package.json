@@ -6,6 +6,7 @@
     "@google/generative-ai": "^0.21.0",
     "@langchain/core": "^0.3.0",
     "@langchain/google-genai": "^0.1.2",
+    "@langchain/anthropic": "^0.2.0",
     "@langchain/pinecone": "^0.1.2",
     "@pinecone-database/pinecone": "^3.0.3",
     "langchain": "^0.3.0"

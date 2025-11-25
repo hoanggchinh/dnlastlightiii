@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="2c71b5ec-cbfa-41e0-b493-a049b68c859a" name="Changes" comment="up 1st file">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/ask.js" beforeDir="false" afterPath="$PROJECT_DIR$/api/ask.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ingest.py" beforeDir="false" afterPath="$PROJECT_DIR$/ingest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -53,6 +56,7 @@
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
     &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;JavaScript Debug.index.html.executor&quot;: &quot;Run&quot;,
     &quot;Python.ingest.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
@@ -196,6 +200,10 @@
       <workItem from="1763191172369" duration="773000" />
       <workItem from="1763193736201" duration="439000" />
       <workItem from="1763220691387" duration="4603000" />
+      <workItem from="1763321048109" duration="769000" />
+      <workItem from="1763776947080" duration="626000" />
+      <workItem from="1763779262855" duration="9754000" />
+      <workItem from="1764082372925" duration="7196000" />
     </task>
     <task id="LOCAL-00001" summary="up 1st file">
       <option name="closed" value="true" />
@@ -216,6 +224,6 @@
     <option name="LAST_COMMIT_MESSAGE" value="up 1st file" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/DNLLII$ingest.coverage" NAME="ingest Coverage Results" MODIFIED="1762901605340" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/DNLLII$ingest.coverage" NAME="ingest Coverage Results" MODIFIED="1764092231403" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
