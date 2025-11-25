@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
 
         const embeddings = new GoogleGenerativeAIEmbeddings({
             apiKey: googleApiKey,
-            model: "embedding-001",
+            model: "embedding-004",
         });
 
         // Thêm timeout để tránh request treo
