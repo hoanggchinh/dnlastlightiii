@@ -8,7 +8,7 @@ const { StringOutputParser } = require("@langchain/core/output_parsers");
 
 
 const PINECONE_INDEX_NAME = "rag-do-an";
-const MODEL_NAME = "claude-4-5-haiku-20241022"; // Model mới nhất, rẻ, thông minh
+const MODEL_NAME = "claude-haiku-4-5-20251001"; // Model mới nhất, rẻ, thông minh
 const MAX_CONTEXT_LENGTH = 6000; // Giới hạn ký tự context (khoảng 1500 tokens) để tiết kiệm tiền
 const TOP_K = 4; // Chỉ lấy 4 đoạn liên quan nhất (thay vì 5-10 gây nhiễu và tốn tiền)
 
@@ -90,7 +90,7 @@ module.exports = async (req, res) => {
 
         // Template thông minh: Sử dụng kỹ thuật "Role-playing" và "Format instruction"
         const template = `
-Bạn là một trợ lý AI hỗ trợ sinh viên, nhiệt tình và am hiểu quy chế.
+Bạn là một trợ lý AI hỗ trợ sinh viên, nhiệt tình và am hiểu quy chế của Trường Đại học Kỹ thuật Công nghiệp - Đại học Thái Nguyên
 Nhiệm vụ của bạn là trả lời câu hỏi dựa trên thông tin được cung cấp trong thẻ <context>.
 
 <context>
