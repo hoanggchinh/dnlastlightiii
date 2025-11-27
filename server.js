@@ -25,12 +25,25 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// ---------------------------------------------------------
+
+
+// Thêm sau dòng khai báo transporter
+transporter.verify((error, success) => {
+    if (error) {
+        console.log('❌ Lỗi cấu hình email:', error);
+    } else {
+        console.log('✅ Server email sẵn sàng gửi mail');
+    }
+});
+
+
+
+
+
 // 1. API CHATBOT (RAG)
 // ---------------------------------------------------------
 app.post('/ask', askHandler);
 
-// ---------------------------------------------------------
 // 2. API TÀI KHOẢN (AUTH & OTP)
 // ---------------------------------------------------------
 
@@ -122,9 +135,14 @@ app.post('/api/send-otp', async (req, res) => {
         res.json({ success: true, message: "Đã gửi mã OTP đến email của bạn." });
 
     } catch (err) {
-        console.error("Lỗi gửi OTP:", err);
-        res.status(500).json({ success: false, message: "Không thể gửi email. Vui lòng kiểm tra lại địa chỉ." });
-    }
+    console.error("Lỗi gửi OTP:", err);
+    console.error("Chi tiết:", err.message); // Thêm dòng này
+    res.status(500).json({
+        success: false,
+        message: "Không thể gửi email. Vui lòng kiểm tra lại địa chỉ.",
+        error: err.message // Debug - xóa dòng này khi deploy production
+    });
+}
 });
 
 // C. Xác nhận Đăng ký (Register Verify)
@@ -157,7 +175,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------
+
 // 3. API LỊCH SỬ CHAT
 // ---------------------------------------------------------
 app.get('/api/chats', async (req, res) => {

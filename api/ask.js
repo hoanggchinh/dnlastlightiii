@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
         console.log("🧠 Đang tạo Vector...");
         const embeddings = new GoogleGenerativeAIEmbeddings({
             model: "models/text-embedding-004",
-            apiKey: process.env.GOOGLE_API_KEY,
+            apiKey: process.env.GEMINI_API_KEY,
         });
         const queryVector = await embeddings.embedQuery(question);
 

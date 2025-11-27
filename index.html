@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tomtitmuii</title>
+<title>Tomtitmuiii</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1490,7 +1490,7 @@ function renderTerminal(container, id, $win) {
         container.find('#reg-step-2').addClass('hidden');
     });
 
-    // -- LOGIC API --
+
 
     // A. ĐĂNG NHẬP
     container.find('#btn-login').click(async function() {
@@ -1551,7 +1551,7 @@ function renderTerminal(container, id, $win) {
         setTimeout(() => {
             container.find('#reg-step-1').addClass('hidden');
             container.find('#reg-step-2').removeClass('hidden');
-            container.find('#reg-success').text('Mã OTP giả lập: 123456 (Check server log)').show();
+            container.find('#reg-success').text('W8ing').show();
             btn.text('Gửi mã OTP').prop('disabled', false);
         }, 1000);
     });
