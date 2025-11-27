@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tomtitmui</title>
+<title>Tomtitmuii</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -639,7 +639,7 @@
                 case 'finder': renderFinder(container); break;
                 // Truyền id và $win (context) cho renderTerminal
                 case 'terminal': renderTerminal(container, id, $win); break;
-                case 'textedit': renderTextEdit(container); break;
+                case 'textedit': renderTextEdit(container, id, $win); break;
                 case 'paint': renderPaint(container); break;
                 case 'calculator': renderCalculator(container); break;
                 case 'safari': renderSafari(container); break;
@@ -916,7 +916,7 @@ function renderTerminal(container, id, $win) {
                 display: flex;
                 flex-direction: column;
                 gap: 4px;
-                min-width: 0; /* Fix text overflow */
+                min-width: 0;
             }
             .macos-chat-${uniqueId} .message-wrapper.user .message-content { align-items: flex-end; }
 
@@ -943,7 +943,7 @@ function renderTerminal(container, id, $win) {
 
             .macos-chat-${uniqueId} .message-time { font-size: 11px; color: #666; margin: 0 4px; }
 
-            /* --- TYPING INDICATOR --- */
+
             .macos-chat-${uniqueId} .typing-indicator {
                 display: flex; gap: 4px; padding: 10px 14px; background: #2c2c2e; border-radius: 18px; border-top-left-radius: 4px; width: fit-content;
             }
@@ -1363,7 +1363,7 @@ function renderTerminal(container, id, $win) {
             border: 1px solid #d2d2d7;
             border-radius: 8px;
             font-size: 14px;
-            box-sizing: border-box; /* Quan trọng để không bị tràn lề */
+            box-sizing: border-box;
             outline: none;
         }
         .auth-input:focus { border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,0.1); }

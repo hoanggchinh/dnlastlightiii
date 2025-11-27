@@ -7,7 +7,6 @@
     <list default="true" id="2c71b5ec-cbfa-41e0-b493-a049b68c859a" name="Changes" comment="up 1st file">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server.js" beforeDir="false" afterPath="$PROJECT_DIR$/server.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -206,7 +205,7 @@
       <workItem from="1764220835024" duration="1234000" />
       <workItem from="1764252315631" duration="182000" />
       <workItem from="1764267279488" duration="8112000" />
-      <workItem from="1764279862754" duration="964000" />
+      <workItem from="1764279862754" duration="2607000" />
     </task>
     <task id="LOCAL-00001" summary="up 1st file">
       <option name="closed" value="true" />
