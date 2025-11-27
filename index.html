@@ -305,6 +305,107 @@
     .icon-trash { background: linear-gradient(180deg, #f2f2f7 0%, #d1d1d6 100%); position: relative; }
     .icon-trash::after { content: '\f1f8'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #777; font-size: 30px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 
+
+
+
+    /* --- CSS CHO AUTH (Login/Register) --- */
+    .auth-container {
+        padding: 20px;
+        color: #333;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .auth-box {
+        background: #fff;
+        padding: 25px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .auth-input {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    .auth-btn {
+        width: 100%;
+        padding: 10px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    .auth-btn:hover { background: #0056b3; }
+    .auth-link {
+        text-align: center;
+        font-size: 0.9em;
+        color: #007bff;
+        cursor: pointer;
+        margin-top: 10px;
+        display: block;
+    }
+    .hidden { display: none; }
+
+    /* --- CSS CHO CHAT SIDEBAR (Nâng cấp Chatbot) --- */
+    /*.chat-layout {*/
+    /*    display: flex;*/
+    /*    height: 100%;*/
+    /*}*/
+    /*.chat-sidebar {*/
+    /*    width: 250px;*/
+    /*    background: #f0f2f5;*/
+    /*    border-right: 1px solid #ccc;*/
+    /*    display: flex;*/
+    /*    flex-direction: column;*/
+    /*}*/
+    /*.new-chat-btn {*/
+    /*    margin: 10px;*/
+    /*    padding: 10px;*/
+    /*    background: #28a745;*/
+    /*    color: white;*/
+    /*    border: none;*/
+    /*    border-radius: 5px;*/
+    /*    cursor: pointer;*/
+    /*    text-align: center;*/
+    /*}*/
+    /*.history-list {*/
+    /*    flex: 1;*/
+    /*    overflow-y: auto;*/
+    /*    list-style: none;*/
+    /*    padding: 0;*/
+    /*    margin: 0;*/
+    /*}*/
+    /*.history-item {*/
+    /*    padding: 10px 15px;*/
+    /*    border-bottom: 1px solid #e1e1e1;*/
+    /*    cursor: pointer;*/
+    /*    white-space: nowrap;*/
+    /*    overflow: hidden;*/
+    /*    text-overflow: ellipsis;*/
+    /*    font-size: 0.9em;*/
+    /*    color: #333;*/
+    /*}*/
+    /*.history-item:hover { background: #e9ecef; }*/
+    /*.history-item.active { background: #dbeafe; border-left: 4px solid #007bff; }*/
+    /*.chat-main {*/
+    /*    flex: 1;*/
+    /*    display: flex;*/
+    /*    flex-direction: column;*/
+    /*    background: white;*/
+    /*}*/
+    /*!* Sửa lại khung chat body cũ để nó nằm gọn trong chat-main *!*/
+    /*#chat-body { flex: 1; overflow-y: auto; padding: 20px; }*/
+    /*.chat-input-area { padding: 15px; border-top: 1px solid #eee; background: #fff; }*/
+
+
+
 </style>
 </head>
 <body>
@@ -613,254 +714,819 @@
     }
 
     // 2. TERMINAL (CHATBOT ĐÃ GỘP)
-    function renderTerminal(container, id, $win) { // id (ví dụ: "terminal") và $win (cửa sổ jQuery)
+function renderTerminal(container, id, $win) {
+    const uniqueId = $win.attr('id');
 
-        // 1. CSS (Lấy từ index.html và sửa đổi)
-        const chatStyles = `
-            <style>
-                /* CSS của Chatbot được nhúng và điều chỉnh */
-                .chat-container-terminal {
-                    width: 100%; /* Lấp đầy 100% cửa sổ */
-                    max-width: 100%;
-                    background: white;
-                    border-radius: 0;
-                    box-shadow: none;
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                    height: 100%; /* Lấp đầy 100% cửa sổ */
-                    font-family: Arial, sans-serif;
-                    user-select: text;
-                }
-                .chat-container-terminal .chat-header {
-                    background-color: #1a73e8;
-                    color: white;
-                    padding: 15px;
-                    text-align: center;
-                    font-size: 1.2em;
-                    font-weight: bold;
-                    flex-shrink: 0;
-                    user-select: none;
-                }
-                .chat-container-terminal .chat-box {
-                    flex-grow: 1;
-                    padding: 20px;
-                    overflow-y: auto;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 15px;
-                    background-color: #f4f7f9;
-                }
-                .chat-container-terminal .message {
-                    max-width: 80%;
-                    padding: 10px 15px;
-                    border-radius: 20px;
-                    line-height: 1.5;
-                    word-wrap: break-word;
-                }
-                .chat-container-terminal .user-message {
-                    background-color: #e6f7ff;
-                    align-self: flex-end;
-                    border-bottom-right-radius: 5px;
-                    color: #1f3e5b;
-                }
-                .chat-container-terminal .bot-message {
-                    background-color: #f0f0f0;
-                    align-self: flex-start;
-                    border-bottom-left-radius: 5px;
-                    color: #333;
-                }
-                .chat-container-terminal .chat-input-container {
-                    padding: 15px;
-                    border-top: 1px solid #eee;
-                    display: flex;
-                    gap: 10px;
-                    background: white;
-                    flex-shrink: 0;
-                }
-                /* ID duy nhất cho các phần tử */
-                .chat-container-terminal .chat-input-terminal {
-                    flex-grow: 1;
-                    padding: 10px;
-                    border: 1px solid #ccc;
-                    border-radius: 20px;
-                    font-size: 1em;
-                    color: #333;
-                    user-select: text;
-                }
-                .chat-container-terminal .send-btn-terminal {
-                    background-color: #1a73e8;
-                    color: white;
-                    border: none;
-                    padding: 10px 15px;
-                    border-radius: 20px;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
-                    user-select: none;
-                }
-                .chat-container-terminal .send-btn-terminal:hover {
-                    background-color: #155cb0;
-                }
-                .chat-container-terminal .send-btn-terminal:disabled {
-                    background-color: #90b8e0;
-                    cursor: not-allowed;
-                }
-                .chat-container-terminal .typing-indicator {
-                    align-self: flex-start;
-                    color: #666;
-                    font-style: italic;
-                    animation: fadeIn 0.5s;
-                }
-                .chat-container-terminal .bot-message p {
-                    margin: 5px 0; /* Cách dòng đoạn văn */
-                }
-                .chat-container-terminal .bot-message ul,
-                .chat-container-terminal .bot-message ol {
-                    margin: 5px 0 5px 20px; /* Thụt đầu dòng cho danh sách */
-                    padding: 0;
-                }
-                .chat-container-terminal .bot-message li {
-                    margin-bottom: 3px;
-                }
-                .chat-container-terminal .bot-message strong {
-                    font-weight: bold;
-                    color: #000; /* Làm đậm chữ quan trọng */
-                }
+    // --- 1. KHAI BÁO BIẾN TRẠNG THÁI ---
+    // Lấy ID người dùng từ LocalStorage (được lưu lúc đăng nhập ở app Tài Khoản)
+    let currentUserId = localStorage.getItem('userId');
+    let currentChatId = null; // null nghĩa là đang ở trạng thái tạo đoạn chat mới
 
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-            </style>
-        `;
+    // --- 2. CSS FULL (GIAO DIỆN MACOS DARK MODE) ---
+    const chatStyles = `
+        <style>
+            .macos-chat-${uniqueId} {
+                display: flex;
+                height: 100%;
+                background: #171717;
+                color: #e5e5e5;
+                font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+                user-select: text;
+                overflow: hidden; /* Tránh vỡ layout */
+            }
 
-        // 2. HTML (Lấy từ index.html và sửa đổi ID)
-        // Chúng ta dùng ID của cửa sổ (ví dụ 'win-terminal') để tạo ID duy nhất
-        const uniqueId = $win.attr('id'); // ví dụ: "win-terminal"
+            /* --- SIDEBAR --- */
+            .macos-chat-${uniqueId} .chat-sidebar {
+                width: 240px;
+                background: #000000;
+                border-right: 1px solid #262626;
+                display: flex;
+                flex-direction: column;
+                flex-shrink: 0;
+            }
 
-        const chatHTML = `
-            <div class="chat-container-terminal">
-                <div class="chat-header">ChatUIA</div>
-                <div class="chat-box" id="chat-box-${uniqueId}">
-                    <div class="message bot-message">Chào bạn! Tôi là trợ lý AI, tôi có thể trả lời các câu hỏi xoay quanh vấn đề học tập của TNUT. Hãy hỏi tôi nhé!</div>
+            .macos-chat-${uniqueId} .sidebar-header {
+                padding: 16px;
+                border-bottom: 1px solid #262626;
+            }
 
+            .macos-chat-${uniqueId} .new-chat-btn {
+                width: 100%;
+                padding: 10px 12px;
+                background: #262626;
+                border: 1px solid #333;
+                border-radius: 8px;
+                color: #e5e5e5;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                transition: all 0.2s;
+            }
+
+            .macos-chat-${uniqueId} .new-chat-btn:hover {
+                background: #333;
+                border-color: #444;
+            }
+
+            .macos-chat-${uniqueId} .chat-history {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px;
+            }
+
+            /* Scrollbar cho sidebar */
+            .macos-chat-${uniqueId} .chat-history::-webkit-scrollbar { width: 6px; }
+            .macos-chat-${uniqueId} .chat-history::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+            .macos-chat-${uniqueId} .history-item {
+                padding: 10px;
+                border-radius: 6px;
+                font-size: 13px;
+                cursor: pointer;
+                margin-bottom: 4px;
+                transition: background 0.2s;
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                color: #a1a1aa;
+            }
+
+            .macos-chat-${uniqueId} .history-item:hover {
+                background: rgba(255,255,255,0.08);
+                color: #e5e5e5;
+            }
+
+            .macos-chat-${uniqueId} .history-item.active {
+                background: #262626;
+                color: #fff;
+            }
+
+            .macos-chat-${uniqueId} .history-title {
+                flex: 1;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-weight: 500;
+            }
+
+            .macos-chat-${uniqueId} .history-time {
+                font-size: 11px;
+                color: #555;
+                margin-top: 2px;
+            }
+
+            .macos-chat-${uniqueId} .loading-msg {
+                text-align: center; font-size: 12px; color: #666; padding: 20px 0;
+            }
+
+            /* --- MAIN CHAT AREA --- */
+            .macos-chat-${uniqueId} .chat-main {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                background: #171717;
+                position: relative;
+            }
+
+            .macos-chat-${uniqueId} .chat-header {
+                height: 60px;
+                background: rgba(23, 23, 23, 0.95);
+                backdrop-filter: blur(10px);
+                border-bottom: 1px solid #262626;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 24px;
+                flex-shrink: 0;
+                z-index: 10;
+            }
+
+            .macos-chat-${uniqueId} .header-left {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .macos-chat-${uniqueId} .bot-avatar-header {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                font-size: 14px;
+                color: white;
+                box-shadow: 0 2px 10px rgba(0, 122, 255, 0.3);
+            }
+
+            .macos-chat-${uniqueId} .bot-info h3 { margin: 0; font-size: 15px; font-weight: 600; color: #fff; }
+            .macos-chat-${uniqueId} .bot-info p { margin: 2px 0 0 0; font-size: 12px; color: #34c759; display: flex; align-items: center; gap: 4px; }
+            .macos-chat-${uniqueId} .bot-info p::before { content: ''; width: 6px; height: 6px; background: #34c759; border-radius: 50%; display: inline-block; }
+
+            /* --- MESSAGES CONTAINER --- */
+            .macos-chat-${uniqueId} .messages-container {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                scroll-behavior: smooth;
+            }
+            .macos-chat-${uniqueId} .messages-container::-webkit-scrollbar { width: 8px; }
+            .macos-chat-${uniqueId} .messages-container::-webkit-scrollbar-track { background: transparent; }
+            .macos-chat-${uniqueId} .messages-container::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+            .macos-chat-${uniqueId} .message-wrapper {
+                display: flex;
+                gap: 14px;
+                max-width: 85%;
+                animation: fadeIn 0.3s ease;
+            }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+            .macos-chat-${uniqueId} .message-wrapper.user {
+                flex-direction: row-reverse;
+                align-self: flex-end;
+            }
+
+            .macos-chat-${uniqueId} .message-avatar {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 600;
+                color: white;
+            }
+
+            .macos-chat-${uniqueId} .message-avatar.bot { background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%); }
+            .macos-chat-${uniqueId} .message-avatar.user { background: linear-gradient(135deg, #FF9500 0%, #FF2D55 100%); }
+
+            .macos-chat-${uniqueId} .message-content {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                min-width: 0; /* Fix text overflow */
+            }
+            .macos-chat-${uniqueId} .message-wrapper.user .message-content { align-items: flex-end; }
+
+            .macos-chat-${uniqueId} .message-bubble {
+                padding: 12px 18px;
+                border-radius: 18px;
+                font-size: 14px;
+                line-height: 1.5;
+                position: relative;
+                word-wrap: break-word;
+            }
+
+            .macos-chat-${uniqueId} .message-bubble.bot {
+                background: #2c2c2e;
+                color: #e5e5e5;
+                border-top-left-radius: 4px;
+            }
+
+            .macos-chat-${uniqueId} .message-bubble.user {
+                background: #0A84FF;
+                color: white;
+                border-top-right-radius: 4px;
+            }
+
+            .macos-chat-${uniqueId} .message-time { font-size: 11px; color: #666; margin: 0 4px; }
+
+            /* --- TYPING INDICATOR --- */
+            .macos-chat-${uniqueId} .typing-indicator {
+                display: flex; gap: 4px; padding: 10px 14px; background: #2c2c2e; border-radius: 18px; border-top-left-radius: 4px; width: fit-content;
+            }
+            .macos-chat-${uniqueId} .typing-dot {
+                width: 6px; height: 6px; border-radius: 50%; background: #888; animation: bounce 1.4s infinite ease-in-out both;
+            }
+            .macos-chat-${uniqueId} .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+            .macos-chat-${uniqueId} .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+            @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+            /* --- INPUT AREA --- */
+            .macos-chat-${uniqueId} .input-container {
+                background: #171717;
+                border-top: 1px solid #262626;
+                padding: 20px;
+                flex-shrink: 0;
+            }
+
+            .macos-chat-${uniqueId} .input-wrapper {
+                display: flex;
+                gap: 12px;
+                align-items: flex-end;
+                background: #262626;
+                border: 1px solid #333;
+                border-radius: 24px;
+                padding: 8px 8px 8px 16px;
+                transition: border-color 0.2s;
+            }
+            .macos-chat-${uniqueId} .input-wrapper:focus-within { border-color: #555; }
+
+            .macos-chat-${uniqueId} .chat-input {
+                flex: 1;
+                background: transparent;
+                border: none;
+                color: #fff;
+                font-size: 14px;
+                resize: none;
+                outline: none;
+                max-height: 120px;
+                padding: 8px 0;
+                line-height: 1.4;
+                font-family: inherit;
+            }
+            .macos-chat-${uniqueId} .chat-input::placeholder { color: #666; }
+
+            .macos-chat-${uniqueId} .send-btn {
+                background: #0A84FF;
+                border: none;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                color: white;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            }
+            .macos-chat-${uniqueId} .send-btn:hover:not(:disabled) { background: #0077ED; transform: scale(1.05); }
+            .macos-chat-${uniqueId} .send-btn:disabled { background: #333; color: #555; cursor: not-allowed; }
+
+            .macos-chat-${uniqueId} .hint-text {
+                text-align: center; font-size: 11px; color: #444; margin-top: 10px;
+            }
+
+            /* --- MARKDOWN STYLES (Cho Bot) --- */
+            .macos-chat-${uniqueId} .message-bubble.bot p { margin: 0 0 8px 0; }
+            .macos-chat-${uniqueId} .message-bubble.bot p:last-child { margin: 0; }
+            .macos-chat-${uniqueId} .message-bubble.bot strong { color: #fff; font-weight: 600; }
+            .macos-chat-${uniqueId} .message-bubble.bot ul, .macos-chat-${uniqueId} .message-bubble.bot ol { margin: 8px 0; padding-left: 20px; }
+            .macos-chat-${uniqueId} .message-bubble.bot li { margin-bottom: 4px; }
+            .macos-chat-${uniqueId} .message-bubble.bot code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #ff9f0a; }
+            .macos-chat-${uniqueId} .message-bubble.bot pre { background: #1c1c1e; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 1px solid #333; }
+            .macos-chat-${uniqueId} .message-bubble.bot pre code { background: none; padding: 0; color: #e5e5e5; }
+        </style>
+    `;
+
+    // --- 3. HTML STRUCTURE ---
+    const chatHTML = `
+        <div class="macos-chat-${uniqueId}">
+            <div class="chat-sidebar">
+                <div class="sidebar-header">
+                    <button class="new-chat-btn" id="btn-new-chat-${uniqueId}">
+                        <i class="fas fa-plus"></i>
+                        <span>Đoạn chat mới</span>
+                    </button>
                 </div>
-                <div class="chat-input-container">
-                    <input type="text" id="chat-input-${uniqueId}" class="chat-input-terminal" placeholder="Nhập câu hỏi của bạn...">
-                    <button id="send-btn-${uniqueId}" class="send-btn-terminal">Gửi</button>
+                <div class="chat-history" id="history-list-${uniqueId}">
+                    <div class="loading-msg">Đang tải lịch sử...</div>
+                </div>
+            </div>
+
+            <div class="chat-main">
+                <div class="chat-header">
+                    <div class="header-left">
+                        <div class="bot-avatar-header">AI</div>
+                        <div class="bot-info">
+                            <h3>Trợ lý Sinh viên</h3>
+                            <p>Sẵn sàng hỗ trợ</p>
+                        </div>
+                    </div>
+                    <div style="color: #666; font-size: 12px;" id="status-${uniqueId}"></div>
+                </div>
+
+                <div class="messages-container" id="messages-${uniqueId}">
+                    <div class="message-wrapper">
+                        <div class="message-avatar bot">AI</div>
+                        <div class="message-content">
+                            <div class="message-bubble bot">
+                                Xin chào! Tôi có thể giúp gì cho bạn về quy chế, học bổng hay lịch học không?
+                            </div>
+                            <div class="message-time">Bây giờ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea
+                            id="chat-input-${uniqueId}"
+                            class="chat-input"
+                            placeholder="Nhập câu hỏi của bạn..."
+                            rows="1"
+                        ></textarea>
+                        <button id="send-btn-${uniqueId}" class="send-btn" disabled>
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                    </div>
+                    <div class="hint-text">Enter để gửi • Shift + Enter xuống dòng</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Render vào DOM
+    container.html(chatStyles + chatHTML);
+
+    // --- 4. LOGIC JAVASCRIPT ---
+
+    // Elements
+    const messagesContainer = $win.find(`#messages-${uniqueId}`);
+    const chatInput = $win.find(`#chat-input-${uniqueId}`);
+    const sendBtn = $win.find(`#send-btn-${uniqueId}`);
+    const historyList = $win.find(`#history-list-${uniqueId}`);
+    const newChatBtn = $win.find(`#btn-new-chat-${uniqueId}`);
+
+    // Helper: Cuộn xuống cuối
+    const scrollToBottom = () => {
+        messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
+    };
+
+    // Helper: Format thời gian
+    const getCurrentTime = () => new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
+
+    // Helper: Hiển thị Typing Indicator
+    const showTyping = () => {
+        const html = `
+            <div class="message-wrapper typing-wrapper">
+                <div class="message-avatar bot">AI</div>
+                <div class="message-content">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+                    </div>
+                </div>
+            </div>`;
+        messagesContainer.append(html);
+        scrollToBottom();
+    };
+
+    // Helper: Xóa Typing Indicator
+    const removeTyping = () => messagesContainer.find('.typing-wrapper').remove();
+
+    // Helper: Hiển thị tin nhắn
+    const appendMessage = (text, sender) => {
+        const time = getCurrentTime();
+        const avatarText = sender === 'user' ? 'U' : 'AI';
+        const avatarClass = sender === 'user' ? 'user' : 'bot';
+        const bubbleClass = sender === 'user' ? 'user' : 'bot';
+
+        // Parse Markdown nếu là bot (dùng thư viện marked)
+        let content = text;
+        if (sender === 'bot' && typeof marked !== 'undefined') {
+            content = marked.parse(text);
+        } else if (sender === 'bot') {
+            // Fallback nếu quên import marked
+            content = text.replace(/\n/g, '<br>');
+        } else {
+            // User input thì escape HTML để tránh XSS
+            content = $('<div>').text(text).html().replace(/\n/g, '<br>');
+        }
+
+        const html = `
+            <div class="message-wrapper ${sender}">
+                <div class="message-avatar ${avatarClass}">${avatarText}</div>
+                <div class="message-content">
+                    <div class="message-bubble ${bubbleClass}">${content}</div>
+                    <div class="message-time">${time}</div>
                 </div>
             </div>
         `;
+        messagesContainer.append(html);
+        scrollToBottom();
+    };
 
-        // 3. Đưa HTML và CSS vào container
-        container.html(chatStyles + chatHTML);
+    // --- LOGIC 1: TẢI LỊCH SỬ CHAT (SIDEBAR) ---
+    const loadHistory = async () => {
+        if (!currentUserId) {
+            historyList.html('<div class="loading-msg">⚠️ Vui lòng đăng nhập<br>ở ứng dụng Tài Khoản.</div>');
+            return;
+        }
 
-        // 4. JavaScript (Lấy từ script và gắn vào ID duy nhất)
-        // Chúng ta không dùng DOMContentLoaded vì DOM đã sẵn sàng
+        try {
+            const res = await fetch(`/api/chats?userId=${currentUserId}`);
+            const chats = await res.json();
 
-        // Tìm các phần tử trong phạm vi cửa sổ ($win)
-        const chatBox = $win.find(`#chat-box-${uniqueId}`);
-        const chatInput = $win.find(`#chat-input-${uniqueId}`);
-        const sendBtn = $win.find(`#send-btn-${uniqueId}`);
+            historyList.empty();
 
-        // Hàm cuộn xuống tin nhắn cuối cùng
-        const scrollToBottom = () => {
-            chatBox.scrollTop(chatBox[0].scrollHeight);
-        };
-
-        // Hàm hiển thị tin nhắn ĐÃ SỬA
-        const displayMessage = (text, sender) => {
-            const msgDiv = $('<div></div>')
-                .addClass('message')
-                .addClass(sender === 'user' ? 'user-message' : 'bot-message');
-
-            if (sender === 'bot') {
-                // Nếu là Bot: Dùng marked.parse để chuyển Markdown sang HTML
-                msgDiv.html(marked.parse(text));
-            } else {
-                // Nếu là User: Dùng text() để an toàn (tránh lỗi hiển thị code HTML)
-                msgDiv.text(text);
+            if (chats.length === 0) {
+                historyList.html('<div class="loading-msg">Chưa có đoạn chat nào.</div>');
+                return;
             }
 
-            chatBox.append(msgDiv);
+            chats.forEach(chat => {
+                const activeClass = chat.id === currentChatId ? 'active' : '';
+                const title = chat.title || 'Đoạn chat mới';
+                const date = new Date(chat.created_at).toLocaleDateString('vi-VN', {day:'numeric', month:'numeric'});
+
+                const itemHtml = `
+                    <div class="history-item ${activeClass}" data-id="${chat.id}">
+                        <i class="fas fa-message" style="margin-top:2px;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <div class="history-title">${title}</div>
+                            <div class="history-time">${date}</div>
+                        </div>
+                    </div>
+                `;
+                historyList.append(itemHtml);
+            });
+
+            // Gắn sự kiện click
+            historyList.find('.history-item').click(function() {
+                const chatId = $(this).data('id');
+                switchChat(chatId);
+            });
+
+        } catch (error) {
+            console.error(error);
+            historyList.html('<div class="loading-msg">Lỗi tải dữ liệu.</div>');
+        }
+    };
+
+    // --- LOGIC 2: CHUYỂN ĐOẠN CHAT ---
+    const switchChat = async (chatId) => {
+        if (currentChatId === chatId) return; // Đang xem rồi thì thôi
+        currentChatId = chatId;
+
+        // UI Updates
+        historyList.find('.history-item').removeClass('active');
+        historyList.find(`[data-id="${chatId}"]`).addClass('active');
+        messagesContainer.empty();
+        messagesContainer.append('<div class="loading-msg">Đang tải tin nhắn...</div>');
+
+        try {
+            const res = await fetch(`/api/messages?chatId=${chatId}`);
+            const messages = await res.json();
+
+            messagesContainer.empty(); // Xóa loading
+
+            messages.forEach(msg => {
+                const sender = msg.role === 'assistant' ? 'bot' : 'user';
+                appendMessage(msg.content, sender);
+            });
             scrollToBottom();
-            return msgDiv;
-        };
 
-        // Hàm gửi tin nhắn
-        const sendMessage = async () => {
-            const question = chatInput.val().trim();
-            if (question === '') return;
+        } catch (error) {
+            messagesContainer.html('<div class="loading-msg">Lỗi tải tin nhắn.</div>');
+        }
+    };
 
-            // 1. Hiển thị tin nhắn người dùng
-            displayMessage(question, 'user');
-            chatInput.val('');
-            sendBtn.prop('disabled', true); // Vô hiệu hóa nút Gửi
+    // --- LOGIC 3: GỬI TIN NHẮN ---
+    const handleSend = async () => {
+        const question = chatInput.val().trim();
+        if (!question) return;
 
-            // 2. Hiển thị trạng thái đang gõ
-            const typingIndicator = displayMessage('Overthinking... ', 'bot');
-            typingIndicator.addClass('typing-indicator');
+        if (!currentUserId) {
+            alert('Vui lòng mở ứng dụng Tài khoản để Đăng nhập trước!');
+            return;
+        }
 
-            try {
-                // 3. Gửi câu hỏi đến Vercel Serverless Function
-                const response = await fetch('/api/ask', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ question: question }),
-                });
+        // UI Optimistic Update
+        appendMessage(question, 'user');
+        chatInput.val('').trigger('input'); // Clear input & resize
+        sendBtn.prop('disabled', true);
+        showTyping();
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+        try {
+            const res = await fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: question,
+                    userId: currentUserId,
+                    chatId: currentChatId // Gửi kèm ID (nếu null server sẽ tạo mới)
+                })
+            });
 
-                const data = await response.json();
+            const data = await res.json();
 
-                // 4. Xóa trạng thái đang gõ
-                typingIndicator.remove();
+            removeTyping();
 
-                // 5. Hiển thị câu trả lời của Bot
-                let botAnswer = data.answer || "Xin lỗi, đã có lỗi xảy ra hoặc câu trả lời rỗng.";
-                displayMessage(botAnswer, 'bot');
-
-            } catch (error) {
-                console.error('Lỗi khi gửi câu hỏi:', error);
-                // 4. Xóa trạng thái đang gõ
-                typingIndicator.remove();
-                // 5. Hiển thị lỗi
-                displayMessage('Xin lỗi, đã xảy ra lỗi kết nối hoặc lỗi server. Vui lòng liên hệ dev :D', 'bot');
-            } finally {
-                sendBtn.prop('disabled', false); // Kích hoạt lại nút Gửi
+            if (data.answer) {
+                appendMessage(data.answer, 'bot');
             }
-        };
 
-        // Bắt sự kiện Gửi khi nhấn nút (dùng jQuery)
-        sendBtn.on('click', sendMessage);
-
-        // Bắt sự kiện Gửi khi nhấn Enter (dùng jQuery)
-        chatInput.on('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
+            // Nếu đây là tin nhắn đầu tiên của đoạn chat mới -> Reload sidebar để hiện title mới
+            if (currentChatId === null && data.chatId) {
+                currentChatId = data.chatId;
+                loadHistory(); // Reload sidebar
             }
-        });
-    }
+
+        } catch (error) {
+            removeTyping();
+            appendMessage("⚠️ Lỗi kết nối server. Vui lòng thử lại.", 'bot');
+        } finally {
+            sendBtn.prop('disabled', false);
+            chatInput.focus();
+        }
+    };
+
+    // --- LOGIC 4: TẠO CHAT MỚI ---
+    newChatBtn.click(() => {
+        currentChatId = null;
+        historyList.find('.history-item').removeClass('active');
+        messagesContainer.empty();
+
+        // Tin nhắn chào mừng mặc định
+        const welcome = `
+            <div class="message-wrapper">
+                <div class="message-avatar bot">AI</div>
+                <div class="message-content">
+                    <div class="message-bubble bot">
+                        Chào bạn! Chúng ta bắt đầu chủ đề mới nhé.
+                    </div>
+                    <div class="message-time">${getCurrentTime()}</div>
+                </div>
+            </div>
+        `;
+        messagesContainer.append(welcome);
+        chatInput.focus();
+    });
+
+    // --- EVENT LISTENERS ---
+
+    // Gửi khi bấm nút
+    sendBtn.click(handleSend);
+
+    // Gửi khi bấm Enter (Shift+Enter để xuống dòng)
+    chatInput.on('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    });
+
+    // Auto-resize input
+    chatInput.on('input', function() {
+        const val = $(this).val();
+        // Enable/Disable nút gửi
+        sendBtn.prop('disabled', val.trim().length === 0);
+
+        // Resize height
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // --- KHỞI CHẠY ---
+    loadHistory(); // Load sidebar ngay khi mở app
+    chatInput.focus();
+}
 
 
     // 3. TEXTEDIT
-    function renderTextEdit(container) {
-        container.html(`
-            <div class="textedit-app">
-                <div class="text-toolbar">
-                    <select class="text-tool"><option>Helvetica</option><option>Courier</option><option>Times</option></select>
-                    <select class="text-tool"><option>12</option><option>14</option><option>18</option></select>
-                    <button class="text-tool"><i class="fas fa-bold"></i></button>
-                    <button class="text-tool"><i class="fas fa-italic"></i></button>
-                </div>
-                <textarea id="text-area" placeholder="Start typing..."></textarea>
+    function renderTextEdit(container, id, $win) {
+    const uniqueId = $win.attr('id');
+
+    // 1. CSS cho form đăng nhập đẹp
+    const styles = `
+    <style>
+        .auth-app-${uniqueId} {
+            padding: 30px;
+            height: 100%;
+            background: #f5f5f7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #333;
+            box-sizing: border-box;
+        }
+        .auth-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+        }
+        .auth-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #1d1d1f; }
+        .auth-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .auth-input:focus { border-color: #0071e3; }
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            background: #0071e3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .auth-btn:hover { background: #0077ed; }
+        .auth-btn.secondary { background: #f5f5f7; color: #333; margin-top: 10px; }
+        .auth-btn.secondary:hover { background: #e8e8ed; }
+        .auth-link {
+            display: block;
+            margin-top: 15px;
+            font-size: 12px;
+            color: #0071e3;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .auth-link:hover { text-decoration: underline; }
+        .hidden { display: none !important; }
+        .otp-group { display: flex; gap: 5px; margin-bottom: 12px; }
+        .error-msg { color: #ff3b30; font-size: 12px; margin-bottom: 10px; display: none; }
+    </style>
+    `;
+
+    // 2. HTML Structure
+    const html = `
+    <div class="auth-app-${uniqueId}">
+
+        <div id="view-login" class="auth-card">
+            <div class="auth-title">Đăng Nhập</div>
+            <div class="error-msg" id="login-error"></div>
+            <input type="email" id="login-email" class="auth-input" placeholder="Email (@tnut.edu.vn)">
+            <input type="password" id="login-pass" class="auth-input" placeholder="Mật khẩu">
+            <button class="auth-btn" id="btn-login">Đăng nhập</button>
+            <div style="display:flex; justify-content:space-between;">
+                <a class="auth-link" id="link-forgot">Quên mật khẩu?</a>
+                <a class="auth-link" id="link-register">Tạo tài khoản</a>
             </div>
-        `);
-    }
+        </div>
+
+        <div id="view-register" class="auth-card hidden">
+            <div class="auth-title">Tạo Tài Khoản</div>
+            <div class="error-msg" id="reg-error"></div>
+
+            <div id="reg-step-1">
+                <input type="email" id="reg-email" class="auth-input" placeholder="Email của bạn">
+                <input type="password" id="reg-pass" class="auth-input" placeholder="Tạo mật khẩu">
+                <button class="auth-btn" id="btn-send-otp-reg">Gửi mã OTP xác thực</button>
+            </div>
+
+            <div id="reg-step-2" class="hidden">
+                <div style="font-size:12px; color:green; margin-bottom:10px;">Đã gửi OTP về email!</div>
+                <input type="text" id="reg-otp" class="auth-input" placeholder="Nhập mã OTP 6 số">
+                <button class="auth-btn" id="btn-verify-reg">Hoàn tất đăng ký</button>
+            </div>
+
+            <button class="auth-btn secondary" id="back-to-login-1">Quay lại đăng nhập</button>
+        </div>
+
+        <div id="view-forgot" class="auth-card hidden">
+            <div class="auth-title">Khôi Phục Mật Khẩu</div>
+            <div class="error-msg" id="forgot-error"></div>
+
+            <div id="forgot-step-1">
+                <input type="email" id="forgot-email" class="auth-input" placeholder="Nhập email tài khoản">
+                <button class="auth-btn" id="btn-send-otp-forgot">Lấy mã OTP</button>
+            </div>
+
+            <div id="forgot-step-2" class="hidden">
+                <input type="text" id="forgot-otp" class="auth-input" placeholder="Nhập mã OTP">
+                <input type="password" id="new-pass" class="auth-input" placeholder="Mật khẩu mới">
+                <button class="auth-btn" id="btn-reset-pass">Đổi mật khẩu</button>
+            </div>
+
+            <button class="auth-btn secondary" id="back-to-login-2">Quay lại</button>
+        </div>
+    </div>
+    `;
+
+    container.html(styles + html);
+
+    // 3. Logic JavaScript (JQuery)
+    const viewLogin = container.find('#view-login');
+    const viewReg = container.find('#view-register');
+    const viewForgot = container.find('#view-forgot');
+
+    // Chuyển view
+    container.find('#link-register').click(() => { viewLogin.addClass('hidden'); viewReg.removeClass('hidden'); });
+    container.find('#link-forgot').click(() => { viewLogin.addClass('hidden'); viewForgot.removeClass('hidden'); });
+    container.find('#back-to-login-1, #back-to-login-2').click(() => {
+        viewReg.addClass('hidden'); viewForgot.addClass('hidden'); viewLogin.removeClass('hidden');
+    });
+
+    // --- LOGIC GỌI API ---
+
+    // 1. Đăng nhập
+    container.find('#btn-login').click(async () => {
+        const email = container.find('#login-email').val();
+        const password = container.find('#login-pass').val();
+
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // LƯU USER ID VÀO LOCALSTORAGE
+                localStorage.setItem('userId', data.userId);
+                localStorage.setItem('userEmail', email);
+                alert('Đăng nhập thành công! Hãy mở ứng dụng Chat.');
+            } else {
+                container.find('#login-error').text(data.message || 'Lỗi đăng nhập').show();
+            }
+        } catch (e) { alert('Lỗi kết nối server'); }
+    });
+
+    // 2. Gửi OTP Đăng ký
+    container.find('#btn-send-otp-reg').click(async () => {
+        const email = container.find('#reg-email').val();
+        // Gọi API gửi OTP (bạn cần viết API này)
+        // Mock success:
+        container.find('#reg-step-1').addClass('hidden');
+        container.find('#reg-step-2').removeClass('hidden');
+    });
+
+    // 3. Xác thực Đăng ký
+    container.find('#btn-verify-reg').click(async () => {
+        const email = container.find('#reg-email').val();
+        const password = container.find('#reg-pass').val();
+        const otp = container.find('#reg-otp').val();
+
+        // Gọi API register thật
+        const res = await fetch('/api/register', {
+             method: 'POST',
+             headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({ email, password, otp })
+        });
+        const data = await res.json();
+
+        if(data.success) {
+            alert('Tạo tài khoản thành công!');
+            viewReg.addClass('hidden'); viewLogin.removeClass('hidden');
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+
+
+
 
     // 4. SKETCH (Paint)
     let canvas, ctx, painting = false;
