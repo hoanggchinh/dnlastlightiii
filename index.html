@@ -1157,6 +1157,7 @@ function renderTerminal(container, id, $win) {
         }
 
         try {
+            // LƯU Ý: Đã dùng /api/...
             const res = await fetch(`/api/chats?userId=${currentUserId}`);
             const chats = await res.json();
 
@@ -1224,7 +1225,7 @@ function renderTerminal(container, id, $win) {
         }
     };
 
-    // --- LOGIC 3: GỬI TIN NHẮN ---
+    // --- LOGIC 3: GỬI TIN NHẮN (ĐÃ FIX URL) ---
     const handleSend = async () => {
         const question = chatInput.val().trim();
         if (!question) return;
@@ -1241,7 +1242,10 @@ function renderTerminal(container, id, $win) {
         showTyping();
 
         try {
-            const res = await fetch('/ask', {
+            // ===============================================
+            // 🔴 SỬA TẠI ĐÂY: Thêm /api vào trước /ask
+            // ===============================================
+            const res = await fetch('/api/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1266,6 +1270,7 @@ function renderTerminal(container, id, $win) {
             }
 
         } catch (error) {
+            console.error("Lỗi chat:", error);
             removeTyping();
             appendMessage("⚠️ Lỗi kết nối server. Vui lòng thử lại.", 'bot');
         } finally {
