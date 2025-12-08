@@ -10,12 +10,29 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
-
-
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
 
+
+
+
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module" src="utils/wall4.js"></script>
+
+
+
+
+
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 
 <style>
     :root {
@@ -376,6 +393,11 @@
 </style>
 </head>
 <body>
+
+
+    <div id="live-wallpaper-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; display: none;"></div>
+
+
 
     <div id="boot-screen">
         <i class="fab fa-apple apple-logo"></i>
@@ -1944,6 +1966,7 @@ function renderStudio(container) {
 
 
     // 8. SETTINGS
+    // 8. SETTINGS (Đã cập nhật)
     function renderSettings(container) {
         container.html(`
             <div class="settings-app">
@@ -1953,19 +1976,53 @@ function renderStudio(container) {
                 </div>
                 <div style="align-self:flex-start; font-weight:600;">Wallpaper</div>
                 <div class="wall-grid">
-                    <div class="wall-thumb selected" style="background: linear-gradient(200deg, #a729f5, #5823d6, #092775, #1d6f9c);" onclick="changeWall(this)"></div>
+                    <div class="wall-thumb" style="background: linear-gradient(200deg, #a729f5, #5823d6, #092775, #1d6f9c);" onclick="changeWall(this)"></div>
                     <div class="wall-thumb" style="background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);" onclick="changeWall(this)"></div>
-                    <div class="wall-thumb" style="background: url('https://source.unsplash.com/random/800x600?nature,mountain'); background-size:cover;" onclick="changeWall(this)"><span>Ext (Unsplash)</span></div>
-                    <div class="wall-thumb" style="background: #000;" onclick="changeWall(this)"></div>
+                    <div class="wall-thumb" style="background: url('https://source.unsplash.com/random/800x600?nature,mountain'); background-size:cover;" onclick="changeWall(this)"><span>Ext</span></div>
+
+                    <div class="wall-thumb"
+                         style="background: radial-gradient(circle, #000 0%, #222 100%); position: relative; overflow: hidden;"
+                         onclick="changeWall(this, 'blackhole')">
+                         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 10px; font-weight: bold; text-align: center;">
+                            <i class="fas fa-circle-notch fa-spin"></i><br>Live Hole
+                         </div>
+                    </div>
                 </div>
             </div>
         `);
     }
-    window.changeWall = function(el) {
-        $('.wall-thumb').removeClass('selected');
-        $(el).addClass('selected');
+
+
+    // Logic đổi hình nền (Đã cập nhật)
+window.changeWall = function(el, type) {
+    // Loại bỏ class selected khỏi tất cả các hình nền
+    $('.wall-thumb').removeClass('selected');
+    // Thêm class selected cho hình nền được chọn
+    $(el).addClass('selected');
+
+    if (type === 'blackhole') {
+        // Dừng hình nền tĩnh và kích hoạt 3D
+        if (typeof window.stopBlackHole === 'function') {
+            window.stopBlackHole();
+        }
+        $('body').css('background', '#000000'); // Đảm bảo nền body là đen khi dùng Live Wallpaper
+
+        // Gọi hàm startBlackHole từ file wall4.js
+        if (typeof window.startBlackHole === 'function') {
+            window.startBlackHole();
+        } else {
+            console.warn("Lỗi: Không tìm thấy hàm startBlackHole. Đảm bảo wall4.js đã load.");
+            showToast('❌ Đang tải tài nguyên 3D...');
+        }
+    } else {
+        // Dừng 3D và kích hoạt hình nền tĩnh
+        if (typeof window.stopBlackHole === 'function') {
+            window.stopBlackHole();
+        }
+        // Lấy background từ style của thumb áp dụng cho body
         $('body').css('background', $(el).css('background'));
     }
+}
 
     // --- Infrastructure ---
 
