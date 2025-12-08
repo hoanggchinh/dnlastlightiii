@@ -421,9 +421,10 @@
             z-index: 9999;
             box-shadow: 0 8px 25px rgba(0,0,0,0.4);
         ">
+
             <!-- Hiển thị khi chưa đăng nhập -->
             <div id="menu-guest">
-                <div class="apple-menu-item" onclick="wm.openApp('login')">
+                <div class="apple-menu-item" id="menu-login-btn">
                     <i class="fas fa-user-circle" style="width:18px;"></i>
                     <span>Login / Register</span>
                 </div>
@@ -435,14 +436,14 @@
                     <div style="font-weight:600; color:#fff; font-size:13px;" id="menu-user-email">user@example.com</div>
                     <div>Logged In</div>
                 </div>
-                <div class="apple-menu-item" onclick="handleLogout()">
+                <div class="apple-menu-item" id="menu-logout-btn">
                     <i class="fas fa-sign-out-alt" style="width:18px;"></i>
                     <span>Logout</span>
                 </div>
             </div>
 
             <div class="ctx-hr"></div>
-            <div class="apple-menu-item" onclick="wm.openApp('settings')">
+            <div class="apple-menu-item" id="menu-settings-btn">
                 <i class="fas fa-cog" style="width:18px;"></i>
                 <span>System Settings...</span>
             </div>
@@ -2000,14 +2001,38 @@ function renderStudio(container) {
     // --- Apple Menu Logic ---
     let appleMenuOpen = false;
 
-    // Toggle Apple Menu
-    $('.apple-menu-trigger').on('click', function(e) {
-        e.stopPropagation();
-        appleMenuOpen = !appleMenuOpen;
-        $('#apple-menu').toggle();
-        updateAppleMenuState();
-    });
+// Apple Menu Item Click Handlers
+$('#menu-login-btn').on('click', function(e) {
+    e.stopPropagation();
+    $('#apple-menu').hide();
+    wm.openApp('login');
+});
 
+$('#menu-logout-btn').on('click', function(e) {
+    e.stopPropagation();
+    handleLogout();
+});
+
+$('#menu-settings-btn').on('click', function(e) {
+    e.stopPropagation();
+    $('#apple-menu').hide();
+    wm.openApp('settings');
+});
+
+// Toggle Apple Menu
+$('.apple-menu-trigger').on('click', function(e) {
+    e.stopPropagation();
+
+    const menu = $('#apple-menu');
+    const isVisible = menu.is(':visible');
+
+    if (isVisible) {
+        menu.hide();
+    } else {
+        menu.show();
+        updateAppleMenuState();
+    }
+});
     // Close menu when click outside
     $(document).on('click', function(e) {
         if (!$(e.target).closest('#apple-menu, .apple-menu-trigger').length) {
@@ -2018,56 +2043,76 @@ function renderStudio(container) {
 
     // Update menu based on login state
     function updateAppleMenuState() {
-        const userId = localStorage.getItem('userId');
-        const userEmail = localStorage.getItem('userEmail');
+    const userId = localStorage.getItem('userId');
+    const userEmail = localStorage.getItem('userEmail');
 
-        if (userId) {
-            $('#menu-guest').hide();
-            $('#menu-logged').show();
-            $('#menu-user-email').text(userEmail || 'User');
-        } else {
-            $('#menu-guest').show();
-            $('#menu-logged').hide();
-        }
+    if (userId) {
+        $('#menu-guest').hide();
+        $('#menu-logged').show();
+        $('#menu-user-email').text(userEmail || 'User');
+    } else {
+        $('#menu-guest').show();
+        $('#menu-logged').hide();
     }
+}
 
     // Logout handler
     window.handleLogout = function() {
-    // Tạo confirm dialog đẹp hơn (hoặc giữ confirm đơn giản)
-    const confirmed = confirm('Bạn có chắc muốn đăng xuất?');
+    // Đăng xuất
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userEmail');
 
-    if (confirmed) {
-        localStorage.removeItem('userId');
-        localStorage.removeItem('userEmail');
-        $('#apple-menu').hide();
-        updateAppleMenuState();
-
-        // Hiển thị thông báo bằng toast (có thể thêm CSS cho đẹp)
-        showToast('Đã đăng xuất thành công!');
+    // Đóng tất cả cửa sổ Chatbot
+    if (wm.windows['chatbot']) {
+        wm.closeWindow('chatbot');
     }
+
+    // Ẩn Apple Menu
+    $('#apple-menu').hide();
+
+    // Cập nhật trạng thái menu
+    updateAppleMenuState();
+
+    // Hiển thị toast
+    showToast('✓ Đã đăng xuất');
+
+    // Tự động mở Login sau 1 giây
+    setTimeout(() => {
+        wm.openApp('login');
+    }, 1000);
 };
 
-// Helper: Toast notification (thêm vào cuối script, trước </script>)
 function showToast(message) {
-    const toast = $(`
-        <div style="
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.85); color: white; padding: 12px 24px;
-            border-radius: 20px; font-size: 13px; z-index: 99999;
-            backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            animation: fadeIn 0.3s ease;
-        ">${message}</div>
-    `);
+    const toast = $('<div>')
+        .text(message) // ✅ Dùng .text() thay vì template literal
+        .css({
+            position: 'fixed',
+            bottom: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.85)',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '20px',
+            fontSize: '13px',
+            zIndex: 99999,
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            opacity: 0,
+            transition: 'opacity 0.3s ease'
+        });
 
     $('body').append(toast);
 
-    setTimeout(() => {
-        toast.fadeOut(300, function() { $(this).remove(); });
-    }, 2500);
-}
+    // Fade in
+    setTimeout(() => toast.css('opacity', 1), 10);
 
-    // Call on page load
-    updateAppleMenuState();
+    // Fade out after 2.5s
+    setTimeout(() => {
+        toast.css('opacity', 0);
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
+}updateAppleMenuState();
 </script>
 </body>
 </html>
