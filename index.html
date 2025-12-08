@@ -1245,9 +1245,9 @@ function renderTerminal(container, id, $win) {
         if (!question) return;
 
         if (!currentUserId) {
-            alert('Vui lòng mở ứng dụng Tài khoản để Đăng nhập trước!');
-            return;
-        }
+    appendMessage("⚠️ Bạn cần đăng nhập trước. Vui lòng mở ứng dụng Account (biểu tượng văn bản) để đăng nhập.", 'bot');
+    return;
+}
 
         // UI Optimistic Update
         appendMessage(question, 'user');
@@ -1256,9 +1256,7 @@ function renderTerminal(container, id, $win) {
         showTyping();
 
         try {
-            // ===============================================
-            // 🔴 SỬA TẠI ĐÂY: Thêm /api vào trước /ask
-            // ===============================================
+
             const res = await fetch('/api/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1537,9 +1535,8 @@ function renderTerminal(container, id, $win) {
                 setTimeout(() => {
                     $win.remove();
                     updateAppleMenuState(); // Cập nhật Apple menu
-                    alert("Đăng nhập thành công! Hãy mở ứng dụng Chatbot.");
                     // Optional: Auto open chatbot
-                    // wm.openApp('chatbot');
+                    wm.openApp('chatbot');
                 }, 800);
             } else {
                 errorBox.text(data.message || 'Email hoặc mật khẩu sai').show();
@@ -1613,9 +1610,13 @@ function renderTerminal(container, id, $win) {
             const data = await res.json();
 
             if(data.success) {
-                alert('Đăng ký thành công! Bạn có thể đăng nhập ngay.');
-                container.find('#back-to-login-1').click(); // Quay về login
-            } else {
+    const successBox = container.find('#reg-success');
+    successBox.text('✅ Đăng ký thành công! Đang chuyển về đăng nhập...').show();
+
+    setTimeout(() => {
+        container.find('#back-to-login-1').click(); // Quay về login
+    }, 1500);
+} else {
                 errorBox.text(data.message || 'Mã OTP không đúng').show();
                 btn.text('Xác thực & Đăng ký').prop('disabled', false);
             }
@@ -1645,7 +1646,7 @@ function renderTerminal(container, id, $win) {
             // Hoặc dùng tạm type='register' nếu logic server chưa phân biệt
             const res = await fetch('/api/send-otp', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ email, type: 'register' }) // Tạm dùng register type để lấy mã
+                body: JSON.stringify({ email, type: 'forgot' })
             });
             const data = await res.json();
 
@@ -1684,9 +1685,13 @@ function renderTerminal(container, id, $win) {
             const data = await res.json();
 
             if(data.success) {
-                alert('Đổi mật khẩu thành công! Vui lòng đăng nhập lại.');
-                container.find('#back-to-login-2').click();
-            } else {
+    const successBox = container.find('#forgot-success');
+    successBox.text('✅ Đổi mật khẩu thành công! Đang chuyển về đăng nhập...').show();
+
+    setTimeout(() => {
+        container.find('#back-to-login-2').click();
+    }, 1500);
+} else {
                 errorBox.text(data.message || 'OTP sai hoặc hết hạn').show();
                 btn.text('Đổi mật khẩu').prop('disabled', false);
             }
@@ -2028,14 +2033,38 @@ function renderStudio(container) {
 
     // Logout handler
     window.handleLogout = function() {
-        if (confirm('Bạn có chắc muốn đăng xuất?')) {
-            localStorage.removeItem('userId');
-            localStorage.removeItem('userEmail');
-            $('#apple-menu').hide();
-            alert('Đã đăng xuất thành công!');
-            updateAppleMenuState();
-        }
-    };
+    // Tạo confirm dialog đẹp hơn (hoặc giữ confirm đơn giản)
+    const confirmed = confirm('Bạn có chắc muốn đăng xuất?');
+
+    if (confirmed) {
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userEmail');
+        $('#apple-menu').hide();
+        updateAppleMenuState();
+
+        // Hiển thị thông báo bằng toast (có thể thêm CSS cho đẹp)
+        showToast('Đã đăng xuất thành công!');
+    }
+};
+
+// Helper: Toast notification (thêm vào cuối script, trước </script>)
+function showToast(message) {
+    const toast = $(`
+        <div style="
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.85); color: white; padding: 12px 24px;
+            border-radius: 20px; font-size: 13px; z-index: 99999;
+            backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            animation: fadeIn 0.3s ease;
+        ">${message}</div>
+    `);
+
+    $('body').append(toast);
+
+    setTimeout(() => {
+        toast.fadeOut(300, function() { $(this).remove(); });
+    }, 2500);
+}
 
     // Call on page load
     updateAppleMenuState();
