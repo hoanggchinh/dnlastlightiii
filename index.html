@@ -1532,28 +1532,32 @@ function renderTerminal(container, id, $win) {
 
                 btn.text('Thành công!').css('background', '#28cd41');
 
+                // THÊM: Đóng chatbot cũ nếu đang mở (để reset dữ liệu)
+                if (wm.windows['chatbot']) {
+                    wm.closeWindow('chatbot');
+                }
+
                 // Đóng cửa sổ Login sau 1s
                 setTimeout(() => {
                     $win.remove();
-                    updateAppleMenuState(); // Cập nhật Apple menu
-                    // Optional: Auto open chatbot
+                    delete wm.windows['login'];
+                    $('#dock-login').removeClass('active');
+                    updateAppleMenuState();
+                    // Auto open chatbot mới
                     wm.openApp('chatbot');
                 }, 800);
             } else {
-                errorBox.text(data.message || 'Email hoặc mật khẩu sai').show();
-                btn.text('Đăng nhập').prop('disabled', false);
-            }
-        } catch (e) {
-            console.error(e);
-            errorBox.text('Không thể kết nối Server').show();
-            btn.text('Đăng nhập').prop('disabled', false);
-        }
-    });
+                            errorBox.text(data.message || 'Email hoặc mật khẩu sai').show();
+                            btn.text('Đăng nhập').prop('disabled', false);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        errorBox.text('Không thể kết nối Server').show();
+                        btn.text('Đăng nhập').prop('disabled', false);
+                    }
+                });
 
-    // ==========================================
-    // B. ĐĂNG KÝ (REGISTER)
-    // ==========================================
-
+    // B (REGISTER)
     // B1. GỬI OTP ĐĂNG KÝ (ĐÃ FIX: DÙNG API THẬT)
     container.find('#btn-send-otp-reg, #btn-resend-reg').click(async function() {
         const btn = $(this);
