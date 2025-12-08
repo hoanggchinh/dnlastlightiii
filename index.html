@@ -2056,15 +2056,18 @@ $('.apple-menu-trigger').on('click', function(e) {
     }
 }
 
-    // Logout handler
+// Logout handler
     window.handleLogout = function() {
     // Đăng xuất
     localStorage.removeItem('userId');
     localStorage.removeItem('userEmail');
 
-    // Đóng tất cả cửa sổ Chatbot
+    // Đóng tất cả cửa sổ Chatbot và Login
     if (wm.windows['chatbot']) {
         wm.closeWindow('chatbot');
+    }
+    if (wm.windows['login']) {
+        wm.closeWindow('login');
     }
 
     // Ẩn Apple Menu
