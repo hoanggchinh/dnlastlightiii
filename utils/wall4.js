@@ -229,7 +229,7 @@ export function startBlackHole() {
     // 4. Objects
     // Stars
     const starGeometry = new THREE.BufferGeometry();
-    const starCount = 100000;
+    const starCount = 6000;
     const starPositions = new Float32Array(starCount * 3);
     const starColors = new Float32Array(starCount * 3);
     const starSizes = new Float32Array(starCount);
