@@ -8,13 +8,11 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 let renderer, composer, scene, camera, controls, animationId;
 let isRunning = false;
 
-// Các HẰNG SỐ cần thiết
 const BLACK_HOLE_RADIUS = 1.3;
 const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
 const DISK_OUTER_RADIUS = 8.0;
 const DISK_TILT_ANGLE = Math.PI / 3.0;
 
-// Các Shader Uniforms (Được giữ nguyên)
 const lensingShader = {
     uniforms: {
         "tDiffuse": { value: null },
@@ -407,6 +405,5 @@ export function stopBlackHole() {
     }
 }
 
-// Xuất các hàm ra global scope để file os-core.js (thường không phải module) có thể gọi
 window.startBlackHole = startBlackHole;
 window.stopBlackHole = stopBlackHole;
