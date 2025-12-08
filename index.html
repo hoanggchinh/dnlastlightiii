@@ -213,6 +213,24 @@
     .ctx-item:hover { background: var(--accent); color: white; }
     .ctx-hr { border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 0; }
 
+
+    /* Apple Menu Items */
+    .apple-menu-item {
+        padding: 7px 15px;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s;
+    }
+    .apple-menu-item:hover {
+        background: var(--accent);
+        color: white;
+    }
+    .apple-menu-item i {
+        color: inherit;
+    }
     /* --- APP SPECIFIC STYLES --- */
 
     /* Finder */
@@ -353,57 +371,6 @@
     }
     .hidden { display: none; }
 
-    /* --- CSS CHO CHAT SIDEBAR (Nâng cấp Chatbot) --- */
-    /*.chat-layout {*/
-    /*    display: flex;*/
-    /*    height: 100%;*/
-    /*}*/
-    /*.chat-sidebar {*/
-    /*    width: 250px;*/
-    /*    background: #f0f2f5;*/
-    /*    border-right: 1px solid #ccc;*/
-    /*    display: flex;*/
-    /*    flex-direction: column;*/
-    /*}*/
-    /*.new-chat-btn {*/
-    /*    margin: 10px;*/
-    /*    padding: 10px;*/
-    /*    background: #28a745;*/
-    /*    color: white;*/
-    /*    border: none;*/
-    /*    border-radius: 5px;*/
-    /*    cursor: pointer;*/
-    /*    text-align: center;*/
-    /*}*/
-    /*.history-list {*/
-    /*    flex: 1;*/
-    /*    overflow-y: auto;*/
-    /*    list-style: none;*/
-    /*    padding: 0;*/
-    /*    margin: 0;*/
-    /*}*/
-    /*.history-item {*/
-    /*    padding: 10px 15px;*/
-    /*    border-bottom: 1px solid #e1e1e1;*/
-    /*    cursor: pointer;*/
-    /*    white-space: nowrap;*/
-    /*    overflow: hidden;*/
-    /*    text-overflow: ellipsis;*/
-    /*    font-size: 0.9em;*/
-    /*    color: #333;*/
-    /*}*/
-    /*.history-item:hover { background: #e9ecef; }*/
-    /*.history-item.active { background: #dbeafe; border-left: 4px solid #007bff; }*/
-    /*.chat-main {*/
-    /*    flex: 1;*/
-    /*    display: flex;*/
-    /*    flex-direction: column;*/
-    /*    background: white;*/
-    /*}*/
-    /*!* Sửa lại khung chat body cũ để nó nằm gọn trong chat-main *!*/
-    /*#chat-body { flex: 1; overflow-y: auto; padding: 20px; }*/
-    /*.chat-input-area { padding: 15px; border-top: 1px solid #eee; background: #fff; }*/
-
 
 
 </style>
@@ -419,7 +386,9 @@
 
         <div id="menubar">
             <div class="menu-left">
-                <div class="menu-item"><i class="fab fa-apple apple-icon"></i></div>
+                <div class="menu-item apple-menu-trigger" style="cursor:pointer; position:relative;">
+                    <i class="fab fa-apple apple-icon"></i>
+                </div>
                 <div class="menu-item" id="active-app-name">Finder</div>
                 <div class="menu-item">File</div>
                 <div class="menu-item">Edit</div>
@@ -436,6 +405,53 @@
                 <div class="menu-item" id="clock">Tue Jan 9 9:41 AM</div>
             </div>
         </div>
+
+        <!-- Apple Menu Dropdown -->
+        <div id="apple-menu" style="
+            position: absolute;
+            top: 30px;
+            left: 10px;
+            background: rgba(40,40,40,0.95);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 5px 0;
+            width: 220px;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        ">
+            <!-- Hiển thị khi chưa đăng nhập -->
+            <div id="menu-guest">
+                <div class="apple-menu-item" onclick="wm.openApp('login')">
+                    <i class="fas fa-user-circle" style="width:18px;"></i>
+                    <span>Login / Register</span>
+                </div>
+            </div>
+
+            <!-- Hiển thị khi đã đăng nhập -->
+            <div id="menu-logged" style="display:none;">
+                <div style="padding:8px 15px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px; color:#aaa;">
+                    <div style="font-weight:600; color:#fff; font-size:13px;" id="menu-user-email">user@example.com</div>
+                    <div>Logged In</div>
+                </div>
+                <div class="apple-menu-item" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt" style="width:18px;"></i>
+                    <span>Logout</span>
+                </div>
+            </div>
+
+            <div class="ctx-hr"></div>
+            <div class="apple-menu-item" onclick="wm.openApp('settings')">
+                <i class="fas fa-cog" style="width:18px;"></i>
+                <span>System Settings...</span>
+            </div>
+        </div>
+
+
+
+
+
 
         <div id="windows-container"></div>
 
@@ -459,8 +475,8 @@
     const apps = [
         { id: 'finder', name: 'Finder', iconClass: 'icon-finder' },
         { id: 'safari', name: 'Safari', iconClass: 'icon-safari' },
-        { id: 'terminal', name: 'Terminal', iconClass: 'icon-terminal' },
-        { id: 'textedit', name: 'TextEdit', iconClass: 'icon-text' },
+        { id: 'chatbot', name: 'Chatbot', iconClass: 'icon-terminal' },
+        { id: 'login', name: 'Account', iconClass: 'icon-text' },
         { id: 'paint', name: 'Sketch', iconClass: 'icon-paint' },
         { id: 'calculator', name: 'Calculator', iconClass: 'icon-calc', htmlIcon: '<div></div><div></div><div></div><div></div>' },
         { id: 'studio', name: 'Studio', iconClass: 'icon-studio' },
@@ -563,9 +579,8 @@
             if(id === 'calculator') { w = 250; h = 350; }
             if(id === 'paint' || id === 'studio') { w = 700; h = 500; }
             if(id === 'settings') { w = 500; h = 300; }
-            // Đặt kích thước mặc định cho "Terminal" (nay là Chatbot)
-            if(id === 'terminal') { w = 450; h = 600; }
-
+            // Đặt kích thước mặc định cho Chatbot
+            if(id === 'chatbot') { w = 900; h = 600; }
             // Random position placement
             const top = 50 + (Object.keys(this.windows).length * 20);
             const left = 50 + (Object.keys(this.windows).length * 20);
@@ -637,9 +652,8 @@
             const container = $(`#content-${id}`);
             switch(id) {
                 case 'finder': renderFinder(container); break;
-                // Truyền id và $win (context) cho renderTerminal
-                case 'terminal': renderTerminal(container, id, $win); break;
-                case 'textedit': renderTextEdit(container, id, $win); break;
+                case 'chatbot': renderTerminal(container, id, $win); break;
+                case 'login': renderTextEdit(container, id, $win); break;
                 case 'paint': renderPaint(container); break;
                 case 'calculator': renderCalculator(container); break;
                 case 'safari': renderSafari(container); break;
@@ -1331,7 +1345,7 @@ function renderTerminal(container, id, $win) {
 }
 
 
-    // 3. TEXTEDIT
+    // 3. login / account management
     function renderTextEdit(container, id, $win) {
     const uniqueId = $win.attr('id');
 
@@ -1522,9 +1536,10 @@ function renderTerminal(container, id, $win) {
                 // Đóng cửa sổ Login sau 1s
                 setTimeout(() => {
                     $win.remove();
-                    // NẾU CÓ APP CHAT, GỌI Ở ĐÂY. VÍ DỤ:
-                    // if (typeof openApp === 'function') openApp('chat');
-                    alert("Đăng nhập thành công! Hãy mở ứng dụng Chat.");
+                    updateAppleMenuState(); // Cập nhật Apple menu
+                    alert("Đăng nhập thành công! Hãy mở ứng dụng Chatbot.");
+                    // Optional: Auto open chatbot
+                    // wm.openApp('chatbot');
                 }, 800);
             } else {
                 errorBox.text(data.message || 'Email hoặc mật khẩu sai').show();
@@ -1961,16 +1976,71 @@ function renderStudio(container) {
         });
     }
 
-    // Boot Sequence
+    /// Boot Sequence
     $(window).on('load', () => {
         $('.loading-progress').css('width', '100%');
         setTimeout(() => {
             $('#boot-screen').fadeOut(500, function(){ $(this).remove(); });
-            // Auto open Finder on boot
-            setTimeout(() => wm.openApp('finder'), 600);
+
+            // Check login state - open Login if not logged in, else open Finder
+            const userId = localStorage.getItem('userId');
+            if (!userId) {
+                setTimeout(() => wm.openApp('login'), 600);
+            } else {
+                setTimeout(() => wm.openApp('finder'), 600);
+            }
         }, 3200);
     });
 
+    // --- Apple Menu Logic ---
+    let appleMenuOpen = false;
+
+    // Toggle Apple Menu
+    $('.apple-menu-trigger').on('click', function(e) {
+        e.stopPropagation();
+        appleMenuOpen = !appleMenuOpen;
+        $('#apple-menu').toggle();
+        updateAppleMenuState();
+    });
+
+    // Close menu when click outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('#apple-menu, .apple-menu-trigger').length) {
+            $('#apple-menu').hide();
+            appleMenuOpen = false;
+        }
+    });
+
+    // Update menu based on login state
+    function updateAppleMenuState() {
+        const userId = localStorage.getItem('userId');
+        const userEmail = localStorage.getItem('userEmail');
+
+        if (userId) {
+            $('#menu-guest').hide();
+            $('#menu-logged').show();
+            $('#menu-user-email').text(userEmail || 'User');
+        } else {
+            $('#menu-guest').show();
+            $('#menu-logged').hide();
+        }
+    }
+
+    // Logout handler
+    window.handleLogout = function() {
+        if (confirm('Bạn có chắc muốn đăng xuất?')) {
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userEmail');
+            $('#apple-menu').hide();
+            alert('Đã đăng xuất thành công!');
+            updateAppleMenuState();
+        }
+    };
+
+    // Call on page load
+    updateAppleMenuState();
 </script>
 </body>
 </html>
+
+

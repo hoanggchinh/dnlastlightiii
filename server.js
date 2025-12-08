@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer'); // BẮT BUỘC: Import thư viện gửi mail
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Import các utils
@@ -175,6 +175,41 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+// D. Reset Password (Thêm sau API /api/register, khoảng dòng 147)
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const user = result.rows[0];
+
+        if (!user) {
+            return res.status(400).json({ success: false, message: "Email không tồn tại" });
+        }
+
+        // Kiểm tra OTP
+        if (user.otp_code !== otp) {
+            return res.status(400).json({ success: false, message: "Mã OTP không đúng" });
+        }
+        if (new Date() > new Date(user.otp_expires_at)) {
+            return res.status(400).json({ success: false, message: "Mã OTP đã hết hạn" });
+        }
+
+        // Hash mật khẩu mới
+        const hashedPassword = await hashPassword(newPassword);
+
+        await pool.query(
+            `UPDATE users SET password_hash = $1, otp_code = NULL WHERE email = $2`,
+            [hashedPassword, email]
+        );
+
+        res.json({ success: true, message: "Đổi mật khẩu thành công!" });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Lỗi server" });
+    }
+});
 
 // 3. API LỊCH SỬ CHAT
 // ---------------------------------------------------------
