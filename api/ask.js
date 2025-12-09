@@ -7,61 +7,390 @@ const { GoogleGenerativeAIEmbeddings } = require("@langchain/google-genai");
 const { ChatAnthropic } = require("@langchain/anthropic");
 const { PromptTemplate } = require("@langchain/core/prompts");
 const { StringOutputParser } = require("@langchain/core/output_parsers");
+
 const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || "rag-do-an";
 const MODEL_NAME = "claude-3-5-haiku-20241022";
+const MAX_QUESTION_LENGTH = 500;
+const SIMILARITY_THRESHOLD = 0.55;
+const CHAT_HISTORY_LIMIT = 3;
 
+// ============================================================================
+// LOGGER - Hiển thị trên Vercel
+// ============================================================================
+const logger = {
+    info: (message, meta = {}) => {
+        console.log(JSON.stringify({
+            level: 'info',
+            message,
+            timestamp: new Date().toISOString(),
+            ...meta
+        }));
+    },
+    warn: (message, meta = {}) => {
+        console.warn(JSON.stringify({
+            level: 'warn',
+            message,
+            timestamp: new Date().toISOString(),
+            ...meta
+        }));
+    },
+    error: (message, error = null) => {
+        console.error(JSON.stringify({
+            level: 'error',
+            message,
+            timestamp: new Date().toISOString(),
+            error: error ? {
+                message: error.message,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            } : undefined
+        }));
+    }
+};
+
+// ============================================================================
+// Lấy lịch sử chat từ Database
+// ============================================================================
+async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
+    if (!chatId) return "";
+
+    try {
+        const res = await pool.query(
+            `SELECT role, content FROM messages 
+             WHERE chat_id = $1 
+             ORDER BY created_at DESC 
+             LIMIT $2`,
+            [chatId, limit]
+        );
+
+        if (res.rows.length === 0) return "";
+
+        const history = res.rows.reverse().map(msg => {
+            return `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`;
+        }).join('\n');
+
+        logger.info('Chat history loaded', { chatId, messageCount: res.rows.length });
+        return history;
+    } catch (error) {
+        logger.error('Failed to load chat history', error);
+        return "";
+    }
+}
+
+// ============================================================================
+// Viết lại câu hỏi dựa trên lịch sử
+// ============================================================================
+async function rewriteQuestion(rawQuestion, history, apiKey) {
+    const startTime = Date.now();
+
+    try {
+        const rewriteModel = new ChatAnthropic({
+            modelName: "claude-3-haiku-20240307",
+            apiKey: apiKey,
+            temperature: 0,
+            maxTokens: 200
+        });
+
+        const prompt = `Bạn là trợ lý AI thông minh. Nhiệm vụ của bạn là viết lại câu hỏi của người dùng để tìm kiếm trong tài liệu quy chế đào tạo đại học.
+
+Lịch sử hội thoại (Context):
+"""
+${history || "Không có lịch sử"}
+"""
+
+Câu hỏi hiện tại của người dùng: "${rawQuestion}"
+
+Yêu cầu:
+1. Nếu câu hỏi thiếu chủ ngữ hoặc phụ thuộc vào lịch sử (ví dụ: "còn 6 điểm thì sao?", "thang điểm 4"), hãy DÙNG LỊCH SỬ để điền đầy đủ thông tin.
+2. Sửa lỗi chính tả, từ lóng (ví dụ: "tích gì" -> "xếp loại gì", "rớt môn" -> "học lại").
+3. Viết lại thành một câu truy vấn đầy đủ, rõ ràng, đúng thuật ngữ hành chính.
+4. CHỈ TRẢ VỀ CÂU ĐÃ VIẾT LẠI, KHÔNG GIẢI THÍCH GÌ THÊM.
+
+Câu hỏi viết lại:`;
+
+        const result = await rewriteModel.invoke(prompt);
+        const rewritten = result.content ? result.content.trim() : result.toString().trim();
+
+        const duration = Date.now() - startTime;
+        logger.info('Question rewritten', {
+            original: rawQuestion,
+            rewritten,
+            duration: `${duration}ms`
+        });
+
+        return rewritten;
+    } catch (error) {
+        logger.warn('Question rewrite failed, using original', { error: error.message });
+        return rawQuestion;
+    }
+}
+
+// ============================================================================
+// Rerank chunks dựa trên mức độ liên quan
+// ============================================================================
+function rerankChunks(results, question) {
+    const questionLower = question.toLowerCase();
+    const questionWords = questionLower
+        .split(/\s+/)
+        .filter(word => word.length > 2);
+
+    const rankedResults = results.map(([doc, score]) => {
+        let relevanceScore = score;
+        const content = doc.pageContent.toLowerCase();
+
+        // Tăng điểm nếu chunk chứa nhiều từ khóa từ câu hỏi
+        let keywordMatchCount = 0;
+        questionWords.forEach(word => {
+            if (content.includes(word)) {
+                keywordMatchCount++;
+            }
+        });
+        relevanceScore += keywordMatchCount * 0.05;
+
+        // Tăng điểm nếu chunk có tiêu đề
+        if (doc.metadata.title) {
+            relevanceScore += 0.1;
+        }
+
+        // Tăng điểm cho chunk dài (có nhiều thông tin)
+        if (doc.pageContent.length > 500) {
+            relevanceScore += 0.05;
+        }
+
+        // Tăng điểm nếu có thông tin liên hệ (email, số điện thoại)
+        if (/\d{10,11}|@/.test(content)) {
+            relevanceScore += 0.08;
+        }
+
+        return {
+            doc,
+            originalScore: score,
+            relevanceScore,
+            keywordMatchCount
+        };
+    });
+
+    rankedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+    logger.info('Chunks reranked', {
+        totalChunks: rankedResults.length,
+        topScore: rankedResults[0]?.relevanceScore.toFixed(3),
+        avgKeywordMatch: (rankedResults.reduce((sum, r) => sum + r.keywordMatchCount, 0) / rankedResults.length).toFixed(1)
+    });
+
+    return rankedResults;
+}
+
+// ============================================================================
+// Tạo context từ các chunks
+// ============================================================================
+function buildContext(rankedResults, topK = 5) {
+    const topChunks = rankedResults.slice(0, topK);
+    const uniqueChunks = [];
+
+    // Deduplication
+    const seenContent = new Set();
+    for (const chunk of topChunks) {
+        const signature = chunk.doc.pageContent.substring(0, 100).trim();
+        if (!seenContent.has(signature)) {
+            uniqueChunks.push(chunk);
+            seenContent.add(signature);
+        }
+    }
+
+    logger.info('Context built', {
+        originalChunks: topChunks.length,
+        uniqueChunks: uniqueChunks.length,
+        totalCharacters: uniqueChunks.reduce((sum, c) => sum + c.doc.pageContent.length, 0)
+    });
+
+    return uniqueChunks
+        .map((chunk, index) => {
+            let section = `[Tài liệu ${index + 1}]`;
+            if (chunk.doc.metadata.title) {
+                section += ` ${chunk.doc.metadata.title}`;
+            }
+            section += `\n${chunk.doc.pageContent}`;
+            return section;
+        })
+        .join('\n\n---\n\n');
+}
+
+// ============================================================================
+// Tạo hoặc lấy chatId
+// ============================================================================
+async function ensureChatId(chatId, userId, question) {
+    if (chatId) return chatId;
+
+    try {
+        const title = question.length > 50
+            ? question.substring(0, 47) + "..."
+            : question;
+
+        const result = await pool.query(
+            `INSERT INTO chats (user_id, title) VALUES ($1, $2) RETURNING id`,
+            [userId, title]
+        );
+
+        const newChatId = result.rows[0].id;
+        logger.info('New chat created', { chatId: newChatId, userId });
+        return newChatId;
+    } catch (error) {
+        logger.error('Failed to create chat', error);
+        throw error;
+    }
+}
+
+// ============================================================================
+// Lưu tin nhắn vào database
+// ============================================================================
+async function saveMessage(chatId, role, content, sources = null) {
+    try {
+        await pool.query(
+            `INSERT INTO messages (chat_id, role, content, sources) 
+             VALUES ($1, $2, $3, $4)`,
+            [chatId, role, content, sources ? JSON.stringify(sources) : null]
+        );
+        logger.info('Message saved', { chatId, role, contentLength: content.length });
+    } catch (error) {
+        logger.error('Failed to save message', error);
+        throw error;
+    }
+}
+
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
 module.exports = async (req, res) => {
-    if (req.method !== 'POST') return res.status(405).json({ error: "Method not allowed" });
+    const requestId = Math.random().toString(36).substring(7);
+    const startTime = Date.now();
+
+    logger.info('Request received', {
+        requestId,
+        method: req.method,
+        body: req.body
+    });
+
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: "Method not allowed" });
+    }
 
     try {
         let { question, userId = 1, chatId } = req.body;
 
-        question = sanitizeQuestion(question);
-        if (!question) return res.status(400).json({ error: "Câu hỏi không hợp lệ" });
+        // ========================================
+        // VALIDATION
+        // ========================================
+        if (!userId || userId < 1) {
+            return res.status(400).json({ error: "userId không hợp lệ" });
+        }
 
-        console.log("Đang tạo Vector...");
+        question = sanitizeQuestion(question);
+        if (!question) {
+            return res.status(400).json({ error: "Câu hỏi không hợp lệ" });
+        }
+
+        if (question.length > MAX_QUESTION_LENGTH) {
+            logger.warn('Question truncated', {
+                originalLength: question.length,
+                maxLength: MAX_QUESTION_LENGTH
+            });
+            question = question.substring(0, MAX_QUESTION_LENGTH);
+        }
+
+        logger.info('Question received', { requestId, question });
+
+        // ========================================
+        // LẤY LỊCH SỬ CHAT
+        // ========================================
+        let chatHistory = "";
+        if (chatId) {
+            chatHistory = await getChatHistory(chatId);
+        }
+
+        // ========================================
+        // VIẾT LẠI CÂU HỎI
+        // ========================================
+        const refinedQuestion = await rewriteQuestion(
+            question,
+            chatHistory,
+            process.env.ANTHROPIC_API_KEY
+        );
+
+        // ========================================
+        // TẠO EMBEDDING
+        // ========================================
+        logger.info('Creating embedding', { requestId });
         const embeddings = new GoogleGenerativeAIEmbeddings({
             model: "models/text-embedding-004",
             apiKey: process.env.GEMINI_API_KEY,
         });
-        const queryVector = await embeddings.embedQuery(question);
 
+        const queryVector = await embeddings.embedQuery(refinedQuestion);
+
+        // ========================================
+        // KIỂM TRA CACHE (SAU KHI REWRITE)
+        // ========================================
         const cachedAnswer = await findInSemanticCache(queryVector);
 
-        if (!chatId) {
-            const newChat = await pool.query(
-                `INSERT INTO chats (user_id, title) VALUES ($1, $2) RETURNING id`,
-                [userId, question.substring(0, 50)]
-            );
-            chatId = newChat.rows[0].id;
-        }
-
-        await pool.query(`INSERT INTO messages (chat_id, role, content) VALUES ($1, 'user', $2)`, [chatId, question]);
-
         if (cachedAnswer) {
-            await pool.query(
-                `INSERT INTO messages (chat_id, role, content, sources) VALUES ($1, 'assistant', $2, $3)`,
-                [chatId, cachedAnswer, JSON.stringify({ source: "cache" })]
-            );
-            return res.status(200).json({ answer: cachedAnswer, chatId, cached: true });
-        }
-        console.log("Cache Miss -> Tìm trong Pinecone...");
+            logger.info('Cache HIT', { requestId });
 
+            // Đảm bảo có chatId
+            chatId = await ensureChatId(chatId, userId, question);
+
+            // Lưu cả câu hỏi và câu trả lời
+            await saveMessage(chatId, 'user', question);
+            await saveMessage(chatId, 'assistant', cachedAnswer, { source: "cache" });
+
+            const duration = Date.now() - startTime;
+            logger.info('Request completed from cache', { requestId, duration: `${duration}ms` });
+
+            return res.status(200).json({
+                answer: cachedAnswer,
+                chatId,
+                cached: true
+            });
+        }
+
+        logger.info('Cache MISS', { requestId });
+
+        // ========================================
+        // TÌM KIẾM PINECONE
+        // ========================================
+        logger.info('Searching Pinecone', { requestId });
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
         const index = pinecone.Index(PINECONE_INDEX_NAME);
-        const vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex: index });
-        const results = await vectorStore.similaritySearchVectorWithScore(queryVector, 4);
-        const relevantDocs = results.filter(r => r[1] > 0.35);
+        const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+            pineconeIndex: index
+        });
+
+        const results = await vectorStore.similaritySearchVectorWithScore(queryVector, 10);
+        const relevantDocs = results.filter(r => r[1] > SIMILARITY_THRESHOLD);
+
+        logger.info('Search results', {
+            requestId,
+            totalResults: results.length,
+            relevantResults: relevantDocs.length,
+            threshold: SIMILARITY_THRESHOLD,
+            topScore: results[0]?.[1].toFixed(3)
+        });
 
         let context = "";
         let sources = [];
 
         if (relevantDocs.length > 0) {
-            context = relevantDocs.map(r => r[0].pageContent).join("\n\n");
-            sources = relevantDocs.map(r => r[0].metadata);
+            const rankedResults = rerankChunks(relevantDocs, refinedQuestion);
+            context = buildContext(rankedResults, 5);
+            sources = rankedResults.slice(0, 5).map(item => item.doc.metadata);
         } else {
             context = "Không tìm thấy thông tin cụ thể trong tài liệu.";
+            logger.warn('No relevant documents found', { requestId });
         }
+
+        // ========================================
+        // TẠO CÂU TRẢ LỜI VỚI CLAUDE
+        // ========================================
+        logger.info('Calling Claude API', { requestId });
         const model = new ChatAnthropic({
             modelName: MODEL_NAME,
             apiKey: process.env.ANTHROPIC_API_KEY,
@@ -72,77 +401,90 @@ module.exports = async (req, res) => {
         const template = `
 Bạn là trợ lý AI chuyên nghiệp hỗ trợ sinh viên Trường Đại học Kỹ thuật Công nghiệp – Đại học Thái Nguyên (TNUT).
 
+<history>
+{chat_history}
+</history>
+
 <context>
 {context}
 </context>
 
-Câu hỏi: "{question}"
+Câu hỏi gốc của sinh viên: "{question}"
+(Ý định thực sự: "{refined_question}")
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NGUYÊN TẮC TRẢ LỜI
+HƯỚNG DẪN TRẢ LỜI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. SỬ DỤNG CONTEXT & HISTORY:
+   - Kết hợp thông tin từ Context và Lịch sử trò chuyện để trả lời mạch lạc.
+   - Nếu Context rỗng hoặc không liên quan, hãy nói khéo léo là chưa tìm thấy thông tin trong quy chế hiện tại.
 
-1. NGUỒN THÔNG TIN
-   ✓ CHỈ sử dụng thông tin có trong <context>
-   ✓ KHÔNG suy đoán, giả định, hoặc thêm thông tin ngoài context
-   
-   ⚠️ NẾU CONTEXT THIẾU THÔNG TIN:
-   - Trả lời phần mình biết được từ context
-   - Nói rõ phần nào chưa có thông tin
-   - Gợi ý sinh viên liên hệ bộ phận phụ trách
-   
-   VÍ DỤ: "Dựa trên thông tin mình có, TNUT có các khoa như: [liệt kê]. 
-   Tuy nhiên, để biết chính xác tổng số khoa và thông tin chi tiết, 
-   bạn nên liên hệ Phòng Đào tạo hoặc truy cập website chính thức của trường."
+2. PHONG CÁCH TƯ VẤN:
+   - Trả lời TRỰC DIỆN, không vòng vo.
+   - Không nói "Dựa trên context...", hãy nói như một chuyên gia nắm rõ quy chế.
+   - Dùng format danh sách, in đậm các ý chính (số tiền, điểm số, hạn chót).
 
-2. PHẠM VI HỖ TRỢ
-   Chỉ trả lời các chủ đề:
-   • Nội quy, quy chế đào tạo
-   • Học tập: lịch thi, điểm, đăng ký môn học
-   • Học phí, học bổng, trợ cấp
-   • Dịch vụ sinh viên: ký túc xá, thư viện
-   • Thông tin các khoa, ngành đào tạo
-   • Liên hệ phòng ban
-   
-   ❌ Nếu NGOÀI phạm vi:
-   "Mình chỉ hỗ trợ tư vấn về học tập và dịch vụ sinh viên TNUT nhé! 
-   Bạn có thể liên hệ Phòng Công tác sinh viên để được hỗ trợ thêm."
+3. XỬ LÝ CÂU HỎI THIẾU THÔNG TIN:
+   - Nếu không đủ dữ liệu để khẳng định, hãy hướng dẫn sinh viên liên hệ Phòng Đào tạo hoặc Giáo vụ khoa.
 
-3. CẤU TRÚC TRẢ LỜI
-   • Trả lời trực tiếp câu hỏi ngay từ đầu
-   • Dùng **in đậm** cho thông tin quan trọng (số liệu, tên riêng, thời hạn)
-   • Dùng danh sách (-) khi có nhiều mục
-   • Kết thúc bằng 1 lưu ý/gợi ý hữu ích
-
-4. GIỌNG ĐIỆU
-   ✓ Thân thiện, nhiệt tình
-   ✓ Súc tích, không dài dòng
-   ✓ Tự tin với thông tin có trong context
-   ✓ Khiêm tốn thừa nhận khi thiếu thông tin
-
-5. XỬ LÝ CÂU HỎI VỀ SỐ LƯỢNG/DANH SÁCH
-   • Nếu context có đầy đủ → Trả lời chính xác số lượng + liệt kê
-   • Nếu context chỉ có 1 phần → Liệt kê phần biết được + nói rõ có thể có thêm
-   • Nếu context không có → Hướng dẫn cách tìm thông tin chính xác
+4. CẤU TRÚC:
+   - Mở đầu: Trả lời ngay vấn đề.
+   - Thân bài: Chi tiết quy định/giải thích.
+   - Kết thúc: Lưu ý hoặc lời khuyên bổ ích.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 BẮT ĐẦU TRẢ LỜI:
 `;
 
-        const chain = PromptTemplate.fromTemplate(template).pipe(model).pipe(new StringOutputParser());
-        const answer = await chain.invoke({ context, question });
+        const chain = PromptTemplate.fromTemplate(template)
+            .pipe(model)
+            .pipe(new StringOutputParser());
+
+        const answer = await chain.invoke({
+            context,
+            question,
+            refined_question: refinedQuestion,
+            chat_history: chatHistory
+        });
+
+        logger.info('Answer generated', {
+            requestId,
+            answerLength: answer.length
+        });
+
+        // ========================================
+        // LƯU VÀO DATABASE & CACHE
+        // ========================================
+        chatId = await ensureChatId(chatId, userId, question);
 
         await Promise.all([
-            pool.query(`INSERT INTO messages (chat_id, role, content, sources) VALUES ($1, 'assistant', $2, $3)`,
-                [chatId, answer, JSON.stringify(sources)]),
-            saveToSemanticCache(question, answer, queryVector)
+            saveMessage(chatId, 'user', question),
+            saveMessage(chatId, 'assistant', answer, sources),
+            saveToSemanticCache(refinedQuestion, answer, queryVector)
         ]);
 
-        res.status(200).json({ answer, chatId, sources });
+        const duration = Date.now() - startTime;
+        logger.info('Request completed successfully', {
+            requestId,
+            duration: `${duration}ms`,
+            chatId
+        });
+
+        res.status(200).json({
+            answer,
+            chatId,
+            sources,
+            cached: false
+        });
 
     } catch (error) {
-        console.error("Lỗi Server:", error);
-        res.status(500).json({ error: "Lỗi hệ thống. Vui lòng thử lại sau." });
+        const duration = Date.now() - startTime;
+        logger.error('Request failed', error);
+
+        res.status(500).json({
+            error: "Lỗi hệ thống. Vui lòng thử lại sau.",
+            requestId,
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
