@@ -25,7 +25,7 @@
 
 
 <script type="module">
-    // --- KHAI BÁO THƯ VIỆN TỪ CDN (Chạy online không cần file) ---
+    // 1. IMPORT THƯ VIỆN (Dùng bản ổn định từ CDN)
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js';
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js';
     import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/EffectComposer.js';
@@ -33,100 +33,20 @@
     import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/UnrealBloomPass.js';
     import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/ShaderPass.js';
 
-    // --- BIẾN TOÀN CỤC QUẢN LÝ ---
+    // 2. KHAI BÁO BIẾN QUẢN LÝ
     let renderer, composer, scene, camera, controls, animationId;
     let isRunning = false;
     let diskMaterial, starMaterial, eventHorizonMat;
 
-    // --- CẤU HÌNH HỐ ĐEN (MAX SETTING) ---
+    // Cấu hình thông số (Giữ nguyên bản gốc)
     const BLACK_HOLE_RADIUS = 1.3;
     const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
     const DISK_OUTER_RADIUS = 8.0;
     const DISK_TILT_ANGLE = Math.PI / 3.0;
 
-    // --- 1. SHADER PHỨC TẠP: SIMPLEX NOISE & ACCRETION DISK ---
-    // Đây là lý do code dài: Thuật toán tạo nhiễu hạt để làm hiệu ứng khói/mây
-    const diskVertexShader = `
-        varying vec2 vUv;
-        varying float vRadius;
-        varying float vAngle;
-        void main() {
-            vUv = uv;
-            vRadius = length(position.xy);
-            vAngle = atan(position.y, position.x);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `;
+    // --- 3. SHADER GỐC (COPY NGUYÊN BẢN TỪ CODE BẠN GỬI) ---
 
-    const diskFragmentShader = `
-        uniform float uTime;
-        uniform vec3 uColorHot;
-        uniform vec3 uColorMid1;
-        uniform vec3 uColorMid2;
-        uniform vec3 uColorOuter;
-        uniform float uNoiseScale;
-
-        varying vec2 vUv;
-        varying float vRadius;
-        varying float vAngle;
-
-        // --- THUẬT TOÁN SIMPLEX NOISE (NGUYÊN BẢN) ---
-        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-        vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
-
-        float snoise(vec2 v) {
-            const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-            vec2 i  = floor(v + dot(v, C.yy) );
-            vec2 x0 = v - i + dot(i, C.xx);
-            vec2 i1;
-            i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-            vec4 x12 = x0.xyxy + C.xxzz;
-            x12.xy -= i1;
-            i = mod289(i);
-            vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
-            vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
-            m = m*m ; m = m*m ;
-            vec3 x = 2.0 * fract(p * C.www) - 1.0;
-            vec3 h = abs(x) - 0.5;
-            vec3 ox = floor(x + 0.5);
-            vec3 a0 = x - ox;
-            m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
-            vec3 g;
-            g.x  = a0.x  * x0.x  + h.x  * x0.y;
-            g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-            return 130.0 * dot(m, g);
-        }
-        // --- KẾT THÚC NOISE ---
-
-        void main() {
-            // Chuẩn hóa bán kính đĩa (0.0 -> 1.0)
-            float normalizedRadius = smoothstep(${DISK_INNER_RADIUS.toFixed(2)}, ${DISK_OUTER_RADIUS.toFixed(2)}, vRadius);
-
-            // Tạo đường xoắn ốc
-            float spiral = vAngle * 3.0 - (1.0 / (normalizedRadius + 0.1)) * 2.0;
-
-            // Tạo chuyển động noise
-            vec2 noiseUv = vec2(vUv.x + uTime * 0.2 + sin(spiral) * 0.1, vUv.y * 0.8 + cos(spiral) * 0.1);
-            float noiseVal = snoise(noiseUv * uNoiseScale);
-            noiseVal = (noiseVal + 1.0) * 0.5;
-
-            // Phối màu theo nhiệt độ (Trong nóng, ngoài lạnh)
-            vec3 color = mix(uColorOuter, uColorMid2, smoothstep(0.0, 0.4, normalizedRadius));
-            color = mix(color, uColorMid1, smoothstep(0.4, 0.7, normalizedRadius));
-            color = mix(color, uColorHot, smoothstep(0.7, 0.95, normalizedRadius));
-
-            // Áp dụng Noise vào màu
-            color *= (0.5 + noiseVal * 1.0);
-
-            // Độ trong suốt (mờ dần ở rìa ngoài)
-            float alpha = (0.2 + noiseVal * 0.9) * (1.0 - smoothstep(0.85, 1.0, normalizedRadius));
-
-            gl_FragColor = vec4(color, alpha);
-        }
-    `;
-
-    // --- 2. SHADER BẺ CONG ÁNH SÁNG (GRAVITATIONAL LENSING) ---
+    // A. Lensing Shader (Bẻ cong ánh sáng)
     const lensingShader = {
         uniforms: {
             "tDiffuse": { value: null },
@@ -151,54 +71,149 @@
                 vec2 toCenter = screenPos - blackHoleScreenPos;
                 toCenter.x *= aspectRatio;
                 float dist = length(toCenter);
-
-                // Công thức bẻ cong ánh sáng
-                float distortion = lensingStrength / (dist * dist + 0.01);
-                distortion = clamp(distortion, 0.0, 0.8);
-                float falloff = smoothstep(lensingRadius, 0.0, dist);
-                distortion *= falloff; // Giảm dần ra xa
-
-                vec2 offset = normalize(toCenter) * distortion;
+                float distortionAmount = lensingStrength / (dist * dist + 0.003);
+                distortionAmount = clamp(distortionAmount, 0.0, 0.7);
+                float falloff = smoothstep(lensingRadius, lensingRadius * 0.3, dist);
+                distortionAmount *= falloff;
+                vec2 offset = normalize(toCenter) * distortionAmount;
                 offset.x /= aspectRatio;
-
-                // Hiệu ứng quang sai màu (Tách màu RGB)
-                vec2 uvR = screenPos - offset * (1.0 + chromaticAberration);
-                vec2 uvG = screenPos - offset;
-                vec2 uvB = screenPos - offset * (1.0 - chromaticAberration);
-
-                float r = texture2D(tDiffuse, uvR).r;
-                float g = texture2D(tDiffuse, uvG).g;
-                float b = texture2D(tDiffuse, uvB).b;
-
+                vec2 distortedUvR = screenPos - offset * (1.0 + chromaticAberration);
+                vec2 distortedUvG = screenPos - offset;
+                vec2 distortedUvB = screenPos - offset * (1.0 - chromaticAberration);
+                float r = texture2D(tDiffuse, distortedUvR).r;
+                float g = texture2D(tDiffuse, distortedUvG).g;
+                float b = texture2D(tDiffuse, distortedUvB).b;
                 gl_FragColor = vec4(r, g, b, 1.0);
-            }
-        `
+            }`
     };
 
-    // --- 3. HÀM INIT (Đã sửa để tích hợp) ---
+    // B. Disk Shader (Đĩa bồi tụ với Simplex Noise - Phần quan trọng nhất tạo nên vẻ đẹp)
+    const diskVertexShader = `
+        varying vec2 vUv;
+        varying float vRadius;
+        varying float vAngle;
+        void main() {
+            vUv = uv;
+            vRadius = length(position.xy);
+            vAngle = atan(position.y, position.x);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    const diskFragmentShader = `
+        uniform float uTime;
+        uniform vec3 uColorHot;
+        uniform vec3 uColorMid1;
+        uniform vec3 uColorMid2;
+        uniform vec3 uColorMid3;
+        uniform vec3 uColorOuter;
+        uniform float uNoiseScale;
+        uniform float uFlowSpeed;
+        uniform float uDensity;
+        varying vec2 vUv;
+        varying float vRadius;
+        varying float vAngle;
+
+        // Simplex Noise Code (Giữ nguyên bản gốc)
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+        float snoise(vec3 v) {
+            const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+            const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+            vec3 i  = floor(v + dot(v, C.yyy) );
+            vec3 x0 = v - i + dot(i, C.xxx) ;
+            vec3 g = step(x0.yzx, x0.xyz);
+            vec3 l = 1.0 - g;
+            vec3 i1 = min( g.xyz, l.zxy );
+            vec3 i2 = max( g.xyz, l.zxy );
+            vec3 x1 = x0 - i1 + C.xxx;
+            vec3 x2 = x0 - i2 + C.yyy;
+            vec3 x3 = x0 - D.yyy;
+            i = mod289(i);
+            vec4 p = permute( permute( permute( i.z + vec4(0.0, i1.z, i2.z, 1.0 )) + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+            float n_ = 0.142857142857;
+            vec3  ns = n_ * D.wyz - D.xzx;
+            vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+            vec4 x_ = floor(j * ns.z);
+            vec4 y_ = floor(j - 7.0 * x_ );
+            vec4 x = x_ *ns.x + ns.yyyy;
+            vec4 y = y_ *ns.x + ns.yyyy;
+            vec4 h = 1.0 - abs(x) - abs(y);
+            vec4 b0 = vec4( x.xy, y.xy );
+            vec4 b1 = vec4( x.zw, y.zw );
+            vec4 s0 = floor(b0)*2.0 + 1.0;
+            vec4 s1 = floor(b1)*2.0 + 1.0;
+            vec4 sh = -step(h, vec4(0.0));
+            vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+            vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+            vec3 p0 = vec3(a0.xy,h.x);
+            vec3 p1 = vec3(a0.zw,h.y);
+            vec3 p2 = vec3(a1.xy,h.z);
+            vec3 p3 = vec3(a1.zw,h.w);
+            vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+            p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+            vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+            m = m * m;
+            return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+        }
+
+        void main() {
+            float normalizedRadius = smoothstep(${DISK_INNER_RADIUS.toFixed(2)}, ${DISK_OUTER_RADIUS.toFixed(2)}, vRadius);
+            float spiral = vAngle * 3.0 - (1.0 / (normalizedRadius + 0.1)) * 2.0;
+            vec2 noiseUv = vec2(vUv.x + uTime * uFlowSpeed * (2.0 / (vRadius * 0.3 + 1.0)) + sin(spiral) * 0.1, vUv.y * 0.8 + cos(spiral) * 0.1);
+            float noiseVal1 = snoise(vec3(noiseUv * uNoiseScale, uTime * 0.15));
+            float noiseVal2 = snoise(vec3(noiseUv * uNoiseScale * 3.0 + 0.8, uTime * 0.22));
+            float noiseVal3 = snoise(vec3(noiseUv * uNoiseScale * 6.0 + 1.5, uTime * 0.3));
+            float noiseVal = (noiseVal1 * 0.45 + noiseVal2 * 0.35 + noiseVal3 * 0.2);
+            noiseVal = (noiseVal + 1.0) * 0.5;
+
+            vec3 color = uColorOuter;
+            color = mix(color, uColorMid3, smoothstep(0.0, 0.25, normalizedRadius));
+            color = mix(color, uColorMid2, smoothstep(0.2, 0.55, normalizedRadius));
+            color = mix(color, uColorMid1, smoothstep(0.5, 0.75, normalizedRadius));
+            color = mix(color, uColorHot, smoothstep(0.7, 0.95, normalizedRadius));
+            color *= (0.5 + noiseVal * 1.0);
+            float brightness = pow(1.0 - normalizedRadius, 1.0) * 3.5 + 0.5;
+            brightness *= (0.3 + noiseVal * 2.2);
+            float pulse = sin(uTime * 1.8 + normalizedRadius * 12.0 + vAngle * 2.0) * 0.15 + 0.85;
+            brightness *= pulse;
+            float alpha = uDensity * (0.2 + noiseVal * 0.9);
+            alpha *= smoothstep(0.0, 0.15, normalizedRadius);
+            alpha *= (1.0 - smoothstep(0.85, 1.0, normalizedRadius));
+            alpha = clamp(alpha, 0.0, 1.0);
+            gl_FragColor = vec4(color * brightness, alpha);
+        }
+    `;
+
+    // --- 4. HÀM INIT (TÍCH HỢP) ---
     function initBlackHole() {
         if (isRunning) return;
 
-        // Tạo hoặc lấy Container
+        // Xử lý Container và Background
         let container = document.getElementById('live-wallpaper-container');
         if (!container) {
             container = document.createElement('div');
             container.id = 'live-wallpaper-container';
-            // CSS trực tiếp để đảm bảo nó nằm dưới nền
-            container.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -999; pointer-events: none;";
+            // Z-index = 0 để nằm dưới icon, pointer-events: none để bấm xuyên qua
+            container.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;";
             document.body.appendChild(container);
         }
-        container.style.display = 'block';
+
+        // QUAN TRỌNG: Thiết lập màu nền gradient giống hệt code gốc để tone màu khớp
+        container.style.background = 'radial-gradient(ellipse at center, #0a0a1a 0%, #000002 70%)';
         container.innerHTML = '';
+        container.style.display = 'block';
+
         isRunning = true;
+        console.log("--> Kích hoạt Hố Đen (High Fidelity Version)");
 
-        console.log("--> KHỞI ĐỘNG BLACK HOLE: FULL VERSION");
-
-        // SETUP CƠ BẢN
+        // Setup Scene
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x050510, 0.02); // Sương mù nhẹ
+        scene.fog = new THREE.FogExp2(0x020104, 0.025);
 
-        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
         camera.position.set(-6.5, 5.0, 6.5);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", alpha: true });
@@ -209,152 +224,150 @@
         renderer.toneMappingExposure = 1.2;
         container.appendChild(renderer.domElement);
 
-        // --- TẠO VẬT THỂ ---
+        // Setup Objects (Y hệt bản gốc)
 
-        // A. Nền Sao (Particles System) - 20,000 ngôi sao
-        const starGeo = new THREE.BufferGeometry();
-        const starCount = 20000;
-        const starPos = new Float32Array(starCount * 3);
-        const starCol = new Float32Array(starCount * 3);
+        // A. STARS (Sao)
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 150000; // Số lượng sao lớn như bản gốc
+        const starPositions = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
         const starSizes = new Float32Array(starCount);
-        const starTwinkle = new Float32Array(starCount); // Tham số lấp lánh riêng
+        const starTwinkle = new Float32Array(starCount);
+        const starFieldRadius = 2000;
+        const starPalette = [
+            new THREE.Color(0x88aaff), new THREE.Color(0xffaaff), new THREE.Color(0xaaffff),
+            new THREE.Color(0xffddaa), new THREE.Color(0xffeecc), new THREE.Color(0xffffff),
+            new THREE.Color(0xff8888), new THREE.Color(0x88ff88), new THREE.Color(0xffff88),
+            new THREE.Color(0x88ffff)
+        ];
 
-        const palette = [0x88aaff, 0xffaaff, 0xaaffff, 0xffddaa, 0xffffff];
-
-        for(let i=0; i<starCount; i++) {
-            // Phân bố cầu (Spherical distribution)
-            const r = 400 + Math.random() * 2000;
-            const theta = 2 * Math.PI * Math.random();
-            const phi = Math.acos(2 * Math.random() - 1);
-
-            starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
-            starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-            starPos[i*3+2] = r * Math.cos(phi);
-
-            // Màu ngẫu nhiên
-            const c = new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
-            starCol[i*3] = c.r; starCol[i*3+1] = c.g; starCol[i*3+2] = c.b;
-
-            starSizes[i] = Math.random() * 2.5;
+        for (let i = 0; i < starCount; i++) {
+            const i3 = i * 3;
+            const phi = Math.acos(-1 + (2 * i) / starCount);
+            const theta = Math.sqrt(starCount * Math.PI) * phi;
+            const radius = Math.cbrt(Math.random()) * starFieldRadius + 100;
+            starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+            starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            starPositions[i3 + 2] = radius * Math.cos(phi);
+            const starColor = starPalette[Math.floor(Math.random() * starPalette.length)].clone();
+            starColor.multiplyScalar(Math.random() * 0.7 + 0.3);
+            starColors[i3] = starColor.r; starColors[i3 + 1] = starColor.g; starColors[i3 + 2] = starColor.b;
+            starSizes[i] = THREE.MathUtils.randFloat(0.6, 3.0);
             starTwinkle[i] = Math.random() * Math.PI * 2;
         }
-
-        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-        starGeo.setAttribute('color', new THREE.BufferAttribute(starCol, 3));
-        starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-        starGeo.setAttribute('twinkle', new THREE.BufferAttribute(starTwinkle, 1));
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+        starGeometry.setAttribute('twinkle', new THREE.BufferAttribute(starTwinkle, 1));
 
         starMaterial = new THREE.ShaderMaterial({
             uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
             vertexShader: `
-                uniform float uTime; uniform float uPixelRatio; attribute float size; attribute float twinkle; varying vec3 vColor;
-                void main() {
-                    vColor = color;
-                    // Sao nhấp nháy theo hàm sin
-                    float blink = sin(uTime * 3.0 + twinkle) * 0.5 + 0.5;
-                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    gl_PointSize = size * uPixelRatio * (0.5 + 0.5 * blink) * (500.0 / -mvPosition.z);
-                    gl_Position = projectionMatrix * mvPosition;
-                }`,
-            fragmentShader: `varying vec3 vColor; void main() { float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard; gl_FragColor = vec4(vColor, 1.0 - smoothstep(0.3, 0.5, d)); }`,
+                uniform float uTime; uniform float uPixelRatio; attribute float size; attribute float twinkle; varying vec3 vColor; varying float vTwinkle;
+                void main() { vColor = color; vTwinkle = sin(uTime * 2.5 + twinkle) * 0.5 + 0.5; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * uPixelRatio * (300.0 / -mvPosition.z); gl_Position = projectionMatrix * mvPosition; }
+            `,
+            fragmentShader: `
+                varying vec3 vColor; varying float vTwinkle;
+                void main() { float dist = distance(gl_PointCoord, vec2(0.5)); if (dist > 0.5) discard; float alpha = 1.0 - smoothstep(0.0, 0.5, dist); alpha *= (0.2 + vTwinkle * 0.8); gl_FragColor = vec4(vColor, alpha); }
+            `,
             transparent: true, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false
         });
-        scene.add(new THREE.Points(starGeo, starMaterial));
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
 
-        // B. Hố Đen (Lõi)
-        const blackHole = new THREE.Mesh(
-            new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 64, 64),
-            new THREE.MeshBasicMaterial({ color: 0x000000 })
-        );
-        scene.add(blackHole);
-
-        // C. Chân trời sự kiện (Event Horizon Glow)
+        // B. Event Horizon
+        const eventHorizonGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS * 1.05, 128, 64);
         eventHorizonMat = new THREE.ShaderMaterial({
-            uniforms: { uTime: { value: 0 }, uCamPos: { value: camera.position } },
-            vertexShader: `varying vec3 vNorm; varying vec3 vPos; void main() { vNorm = normalize(normalMatrix * normal); vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            uniforms: { uTime: { value: 0 }, uCameraPosition: { value: camera.position } },
+            vertexShader: `varying vec3 vNormal; varying vec3 vPosition; void main() { vNormal = normalize(normalMatrix * normal); vPosition = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
             fragmentShader: `
-                uniform float uTime; uniform vec3 uCamPos; varying vec3 vNorm; varying vec3 vPos;
-                void main() {
-                    float fresnel = 1.0 - dot(vNorm, normalize(uCamPos - vPos));
-                    fresnel = pow(fresnel, 3.0);
-                    vec3 color = vec3(1.0, 0.5, 0.2) * fresnel * (0.8 + 0.2 * sin(uTime * 5.0));
-                    gl_FragColor = vec4(color, fresnel);
-                }`,
+                uniform float uTime; uniform vec3 uCameraPosition; varying vec3 vNormal; varying vec3 vPosition;
+                void main() { vec3 viewDirection = normalize(uCameraPosition - vPosition); float fresnel = 1.0 - abs(dot(vNormal, viewDirection)); fresnel = pow(fresnel, 2.5); vec3 glowColor = vec3(1.0, 0.4, 0.1); float pulse = sin(uTime * 2.5) * 0.15 + 0.85; gl_FragColor = vec4(glowColor * fresnel * pulse, fresnel * 0.4); }
+            `,
             transparent: true, blending: THREE.AdditiveBlending, side: THREE.BackSide
         });
-        scene.add(new THREE.Mesh(new THREE.SphereGeometry(BLACK_HOLE_RADIUS * 1.05, 64, 64), eventHorizonMat));
+        scene.add(new THREE.Mesh(eventHorizonGeom, eventHorizonMat));
 
-        // D. Đĩa Bồi Tụ (Accretion Disk) - Dùng Shader "khủng" ở trên
+        // C. Black Hole Core
+        const blackHoleMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 128, 64),
+            new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        blackHoleMesh.renderOrder = 0;
+        scene.add(blackHoleMesh);
+
+        // D. Accretion Disk (Đĩa bồi tụ xịn)
+        const diskGeometry = new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 256, 128);
         diskMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                uTime: { value: 0 },
+                uTime: { value: 0.0 },
                 uColorHot: { value: new THREE.Color(0xffffff) },
-                uColorMid1: { value: new THREE.Color(0xffaa33) },
-                uColorMid2: { value: new THREE.Color(0xff3300) },
-                uColorOuter: { value: new THREE.Color(0x3300aa) },
-                uNoiseScale: { value: 3.0 }
+                uColorMid1: { value: new THREE.Color(0xff7733) },
+                uColorMid2: { value: new THREE.Color(0xff4477) },
+                uColorMid3: { value: new THREE.Color(0x7744ff) },
+                uColorOuter: { value: new THREE.Color(0x4477ff) },
+                uNoiseScale: { value: 2.5 },
+                uFlowSpeed: { value: 0.22 },
+                uDensity: { value: 1.3 }
             },
             vertexShader: diskVertexShader,
             fragmentShader: diskFragmentShader,
-            side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+            transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
         });
-        const disk = new THREE.Mesh(new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 256, 64), diskMaterial);
-        disk.rotation.x = DISK_TILT_ANGLE;
-        scene.add(disk);
+        const accretionDisk = new THREE.Mesh(diskGeometry, diskMaterial);
+        accretionDisk.rotation.x = DISK_TILT_ANGLE;
+        accretionDisk.renderOrder = 1;
+        scene.add(accretionDisk);
 
-        // --- POST PROCESSING (BLOOM + LENSING) ---
+        // Setup Post-processing
         composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.7, 0.8));
 
-        // Hiệu ứng phát sáng (Bloom)
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloom.strength = 1.2;
-        bloom.radius = 0.5;
-        composer.addPass(bloom);
-
-        // Hiệu ứng thấu kính hấp dẫn (Lensing Shader)
         const lensingPass = new ShaderPass(lensingShader);
         composer.addPass(lensingPass);
 
-        // --- CONTROLS ---
+        // Controls
         controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.3;
-        controls.enableZoom = false; // Tắt zoom để không vỡ layout
-        controls.enablePan = false;
+        controls.enableDamping = true; controls.dampingFactor = 0.035;
+        controls.rotateSpeed = 0.4; controls.autoRotate = true; // Auto rotate cho đẹp
+        controls.autoRotateSpeed = 0.5;
+        controls.enablePan = false; controls.enableZoom = false;
 
-        // --- ANIMATION LOOP ---
+        // Animation Loop
         const clock = new THREE.Clock();
-        const bhPos = new THREE.Vector3();
+        const blackHoleScreenPosVec3 = new THREE.Vector3();
 
         const animate = () => {
             if (!isRunning) return;
             animationId = requestAnimationFrame(animate);
-            const time = clock.getElapsedTime();
+            const elapsedTime = clock.getElapsedTime();
+            const deltaTime = clock.getDelta();
 
-            // Update Time cho các shader
-            if (diskMaterial) diskMaterial.uniforms.uTime.value = time;
-            if (starMaterial) starMaterial.uniforms.uTime.value = time;
-            if (eventHorizonMat) {
-                eventHorizonMat.uniforms.uTime.value = time;
-                eventHorizonMat.uniforms.uCamPos.value.copy(camera.position);
+            // Update Uniforms
+            if(diskMaterial) diskMaterial.uniforms.uTime.value = elapsedTime;
+            if(starMaterial) starMaterial.uniforms.uTime.value = elapsedTime;
+            if(eventHorizonMat) {
+                eventHorizonMat.uniforms.uTime.value = elapsedTime;
+                eventHorizonMat.uniforms.uCameraPosition.value.copy(camera.position);
             }
 
-            // Update vị trí Lensing trên màn hình 2D
-            // (Vì camera di chuyển nên vị trí hố đen trên màn hình cũng thay đổi)
-            bhPos.set(0,0,0).project(camera);
-            lensingPass.uniforms.blackHoleScreenPos.value.set((bhPos.x + 1) / 2, (bhPos.y + 1) / 2);
+            // Update Lensing Position
+            blackHoleScreenPosVec3.copy(blackHoleMesh.position).project(camera);
+            lensingPass.uniforms.blackHoleScreenPos.value.set(
+                (blackHoleScreenPosVec3.x + 1) / 2,
+                (blackHoleScreenPosVec3.y + 1) / 2
+            );
 
             controls.update();
-            disk.rotation.z -= 0.002; // Đĩa tự xoay chậm
+            stars.rotation.y += deltaTime * 0.003;
+            stars.rotation.x += deltaTime * 0.001;
+            accretionDisk.rotation.z += deltaTime * 0.005;
 
-            composer.render();
+            composer.render(deltaTime);
         };
         animate();
 
-        // Sự kiện resize
         window.addEventListener('resize', onWindowResize);
     }
 
@@ -364,7 +377,6 @@
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
         composer.setSize(window.innerWidth, window.innerHeight);
-        // Update aspect ratio cho shader lensing
         const pass = composer.passes.find(p => p.material && p.material.uniforms.aspectRatio);
         if(pass) pass.uniforms.aspectRatio.value = window.innerWidth / window.innerHeight;
     }
@@ -375,33 +387,32 @@
         cancelAnimationFrame(animationId);
         window.removeEventListener('resize', onWindowResize);
 
-        // Dọn dẹp bộ nhớ (Rất quan trọng với code nặng này)
-        if(scene) scene.traverse(o => {
-            if(o.geometry) o.geometry.dispose();
-            if(o.material) {
-                if(Array.isArray(o.material)) o.material.forEach(m=>m.dispose());
-                else o.material.dispose();
-            }
-        });
-        if(renderer) {
+        if (scene) {
+            scene.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+        }
+        if (renderer) {
             renderer.dispose();
-            renderer.forceContextLoss();
-            const el = document.getElementById('live-wallpaper-container');
-            if(el) { el.innerHTML = ''; el.style.display = 'none'; }
+            const container = document.getElementById('live-wallpaper-container');
+            if (container) {
+                container.innerHTML = '';
+                container.style.display = 'none';
+            }
         }
     }
 
-    // Gắn hàm vào Window
     window.initBlackHole = initBlackHole;
     window.stopBlackHole = stopBlackHole;
 
-    // --- TEST: TỰ CHẠY SAU 1S ---
-    setTimeout(() => {
-        initBlackHole();
-    }, 1000);
+    // Tự động chạy để test (nhớ xóa khi code đã ổn định)
+    setTimeout(() => initBlackHole(), 1000);
 
 </script>
-
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
@@ -691,7 +702,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        z-index: 0; /* Web của bạn icon là z-index cao hơn, cái này là nền */
+        z-index: 1; /* Web của bạn icon là z-index cao hơn, cái này là nền */
         pointer-events: none; /* Để chuột bấm xuyên qua được vào desktop */
     }
 
