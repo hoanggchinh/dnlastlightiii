@@ -24,8 +24,244 @@
 </script>
 
 
-<script type="module" src="./wall4.js"></script>
+<script type="module">
+    // 1. IMPORT CÁC THƯ VIỆN CẦN THIẾT (Dựa trên Import Map có sẵn trong index.html)
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
+    // 2. KHAI BÁO BIẾN TOÀN CỤC CHO WALLPAPER
+    let renderer, composer, scene, camera, controls, animationId;
+    let isRunning = false;
+
+    const BLACK_HOLE_RADIUS = 1.3;
+    const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
+    const DISK_OUTER_RADIUS = 8.0;
+    const DISK_TILT_ANGLE = Math.PI / 3.0;
+
+    // 3. ĐỊNH NGHĨA SHADER (Hiệu ứng thấu kính hấp dẫn)
+    const lensingShader = {
+        uniforms: {
+            "tDiffuse": { value: null },
+            "blackHoleScreenPos": { value: new THREE.Vector2(0.5, 0.5) },
+            "lensingStrength": { value: 0.12 },
+            "lensingRadius": { value: 0.3 },
+            "aspectRatio": { value: window.innerWidth / window.innerHeight },
+            "chromaticAberration": { value: 0.005 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform vec2 blackHoleScreenPos;
+            uniform float lensingStrength;
+            uniform float lensingRadius;
+            uniform float aspectRatio;
+            uniform float chromaticAberration;
+            varying vec2 vUv;
+
+            void main() {
+                vec2 uv = vUv;
+                vec2 offset = uv - blackHoleScreenPos;
+                offset.x *= aspectRatio;
+                float dist = length(offset);
+
+                // Vùng sự kiện (Event Horizon)
+                if (dist < 0.05) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+
+                // Tính toán độ cong ánh sáng
+                float distortion = lensingStrength / dist;
+                float falloff = smoothstep(lensingRadius, 0.0, dist);
+                distortion *= falloff;
+
+                vec2 direction = normalize(offset);
+
+                // Hiệu ứng quang sai màu (Chromatic Aberration)
+                vec2 uvR = uv - direction * distortion * (1.0 + chromaticAberration);
+                vec2 uvG = uv - direction * distortion;
+                vec2 uvB = uv - direction * distortion * (1.0 - chromaticAberration);
+
+                float r = texture2D(tDiffuse, uvR).r;
+                float g = texture2D(tDiffuse, uvG).g;
+                float b = texture2D(tDiffuse, uvB).b;
+
+                gl_FragColor = vec4(r, g, b, 1.0);
+            }
+        `
+    };
+
+    // 4. HÀM KHỞI TẠO (INIT)
+    function initBlackHole() {
+        if (isRunning) return;
+
+        const container = document.getElementById('live-wallpaper-container');
+        if (!container) {
+            console.error("Không tìm thấy div #live-wallpaper-container");
+            return;
+        }
+
+        container.style.display = 'block';
+        isRunning = true;
+
+        // Scene & Camera
+        scene = new THREE.Scene();
+        // Tạo nền sao (Stars Background)
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 3000;
+        const posArray = new Float32Array(starCount * 3);
+        for(let i=0; i<starCount*3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 100;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const starMat = new THREE.PointsMaterial({color: 0xffffff, size: 0.05});
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 2, 8);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        container.appendChild(renderer.domElement);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+        controls.enableZoom = false; // Tắt zoom để giữ layout
+
+        // Ánh sáng
+        const ambientLight = new THREE.AmbientLight(0x222222);
+        scene.add(ambientLight);
+
+        // Đĩa bồi tụ (Accretion Disk)
+        const diskGeo = new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 128, 32);
+        const diskMat = new THREE.MeshBasicMaterial({
+            color: 0xffaa33,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        // Thêm shader noise đơn giản cho đĩa (giả lập texture)
+        diskMat.onBeforeCompile = (shader) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `vec4 diffuseColor = vec4( diffuse, opacity );`,
+                `
+                float noise = sin(vUv.x * 20.0 + time) * 0.5 + 0.5;
+                float radialGradient = 1.0 - smoothstep(0.0, 1.0, abs(vUv.y - 0.5) * 2.0);
+                vec3 finalColor = diffuse * (0.5 + 0.5 * noise) * radialGradient;
+                vec4 diffuseColor = vec4( finalColor, opacity * radialGradient );
+                `
+            );
+            shader.uniforms.time = { value: 0 };
+            diskMat.userData.shader = shader;
+        };
+
+        const disk = new THREE.Mesh(diskGeo, diskMat);
+        disk.rotation.x = DISK_TILT_ANGLE;
+        scene.add(disk);
+
+        // Post-processing
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0;
+        bloomPass.strength = 1.2; // Độ sáng bloom
+        bloomPass.radius = 0.5;
+
+        const lensingPass = new ShaderPass(lensingShader);
+
+        composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+        composer.addPass(lensingPass);
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+
+        const animate = () => {
+            if (!isRunning) return;
+            animationId = requestAnimationFrame(animate);
+
+            const time = clock.getElapsedTime();
+            controls.update();
+
+            // Update shader uniform time
+            if (diskMat.userData.shader) {
+                diskMat.userData.shader.uniforms.time.value = time;
+            }
+
+            // Update lensing position based on camera
+            // Chiếu vị trí hố đen (0,0,0) lên màn hình 2D
+            const vector = new THREE.Vector3(0, 0, 0);
+            vector.project(camera);
+            const x = (vector.x + 1) / 2;
+            const y = (vector.y + 1) / 2;
+            lensingPass.uniforms.blackHoleScreenPos.value.set(x, y);
+
+            composer.render();
+        };
+
+        animate();
+
+        // Xử lý resize
+        window.addEventListener('resize', () => {
+            if(!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            lensingPass.uniforms.aspectRatio.value = window.innerWidth / window.innerHeight;
+        });
+    }
+
+    // 5. HÀM DỪNG VÀ DỌN DẸP (STOP)
+    function stopBlackHole() {
+        if (!isRunning) return;
+        isRunning = false;
+
+        cancelAnimationFrame(animationId);
+
+        if (scene) {
+            scene.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+        }
+
+        if (renderer) {
+            renderer.dispose();
+            const container = document.getElementById('live-wallpaper-container');
+            if (container) {
+                container.innerHTML = '';
+                container.style.display = 'none';
+            }
+        }
+    }
+
+    // 6. QUAN TRỌNG: GÁN HÀM VÀO WINDOW ĐỂ BÊN NGOÀI GỌI ĐƯỢC
+    window.initBlackHole = initBlackHole;
+    window.stopBlackHole = stopBlackHole;
+
+    // Tự động chạy nếu cần (bỏ comment dòng dưới)
+    // initBlackHole();
+
+</script>
 
 
 
@@ -1994,34 +2230,55 @@ function renderStudio(container) {
 
     // Logic đổi hình nền (Đã cập nhật)
 window.changeWall = function(el, type) {
-    // Loại bỏ class selected khỏi tất cả các hình nền
+    // 1. Loại bỏ class selected khỏi tất cả
     $('.wall-thumb').removeClass('selected');
-    // Thêm class selected cho hình nền được chọn
     $(el).addClass('selected');
 
-    if (type === 'blackhole') {
-        // Dừng hình nền tĩnh và kích hoạt 3D
-        if (typeof window.stopBlackHole === 'function') {
-            window.stopBlackHole();
-        }
-        $('body').css('background', '#000000'); // Đảm bảo nền body là đen khi dùng Live Wallpaper
+    // 2. Xử lý logic
+    // Lưu ý: Đảm bảo nút bấm của bạn truyền đúng tham số type là 'wall4' hoặc 'blackhole'
+    if (type === 'wall4' || type === 'blackhole') {
 
-        // Gọi hàm startBlackHole từ file wall4.js
-        if (typeof window.startBlackHole === 'function') {
-            window.startBlackHole();
-        } else {
-            console.warn("Lỗi: Không tìm thấy hàm startBlackHole. Đảm bảo wall4.js đã load.");
-            showToast('❌ Đang tải tài nguyên 3D...');
-        }
-    } else {
-        // Dừng 3D và kích hoạt hình nền tĩnh
+        // Trước tiên tắt đi để reset (nếu đang chạy)
         if (typeof window.stopBlackHole === 'function') {
             window.stopBlackHole();
         }
-        // Lấy background từ style của thumb áp dụng cho body
-        $('body').css('background', $(el).css('background'));
+
+        // Đặt nền đen
+        $('body').css('background', '#000000');
+
+        // Gọi hàm khởi chạy (Tên đúng là initBlackHole)
+        if (typeof window.initBlackHole === 'function') {
+            // Delay nhẹ 1 chút để DOM kịp cập nhật nếu cần
+            setTimeout(() => {
+                window.initBlackHole();
+            }, 50);
+        } else {
+            console.warn("Chưa load được wall4.js hoặc chưa gắn vào window");
+            // Fallback nếu lỗi: hiện ảnh tĩnh
+            $('body').css('background', 'url(img/wall4_preview.jpg)');
+        }
+
+    } else {
+        // Trường hợp chọn hình nền khác (wall1, wall2...)
+
+        // Dừng hiệu ứng 3D nếu nó đang chạy
+        if (typeof window.stopBlackHole === 'function') {
+            window.stopBlackHole();
+        }
+
+        // Lấy ảnh từ nút bấm áp dụng vào body
+        // (Giả sử trong nút bấm bạn có style="background: url(...)")
+        let bgStyle = $(el).css('background-image');
+        if (bgStyle && bgStyle !== 'none') {
+             $('body').css('background-image', bgStyle);
+             $('body').css('background-size', 'cover');
+             $('body').css('background-position', 'center');
+        } else {
+             // Hoặc lấy màu
+             $('body').css('background', $(el).css('background'));
+        }
     }
-}
+};
 
     // --- Infrastructure ---
 
