@@ -4,7 +4,6 @@ const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Import các utils
 const askHandler = require('./api/ask');
 const { pool } = require('./utils/db');
 const { hashPassword, comparePassword, generateOTP } = require('./utils/authHelper');
@@ -15,12 +14,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// CẤU HÌNH GỬI MAIL (Dùng Gmail làm ví dụ)
-// Bạn cần lấy "App Password" của Gmail để điền vào .env
-// CẤU HÌNH GỬI MAIL (Cập nhật)
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
-    port: 465, // Dùng cổng SSL an toàn nhất của Gmail
+    port: 465,
     secure: true,
     auth: {
         user: process.env.EMAIL_USER,
@@ -28,38 +24,26 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// Verify kết nối khi khởi động
 transporter.verify((error, success) => {
     if (error) {
-        console.log('❌ KẾT NỐI EMAIL THẤT BẠI:', error);
+        console.log('KẾT NỐI EMAIL THẤT BẠI:', error);
     } else {
-        console.log('✅ Server email đã kết nối thành công với: ' + process.env.EMAIL_USER);
+        console.log('Server email đã kết nối thành công với: ' + process.env.EMAIL_USER);
     }
 });
 
-
-
-
-// 1. API CHATBOT (RAG)
-// ---------------------------------------------------------
 app.post('/api/ask', askHandler);
 
-// 2. API TÀI KHOẢN (AUTH & OTP)
-// ---------------------------------------------------------
-
-// A. Đăng nhập
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Tìm user
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         const user = result.rows[0];
 
         if (!user) return res.status(400).json({ success: false, message: "Email chưa đăng ký" });
         if (!user.is_verified) return res.status(400).json({ success: false, message: "Tài khoản chưa xác thực OTP" });
 
-        // Check pass
         if (!user.password_hash) return res.status(400).json({ success: false, message: "Lỗi dữ liệu tài khoản" });
 
         const isMatch = await comparePassword(password, user.password_hash);
@@ -72,48 +56,43 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// B. Gửi OTP (CHẠY THẬT - GỬI EMAIL THẬT)
+
 app.post('/api/send-otp', async (req, res) => {
     try {
-        const { email, type } = req.body; // type: 'register' hoặc 'forgot'
+        const { email, type } = req.body;
         const otp = generateOTP();
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // Hết hạn sau 5 phút
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-        // Kiểm tra user có tồn tại không
         const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         const user = userCheck.rows[0];
 
         if (type === 'register') {
-            // Nếu đăng ký: Email phải chưa tồn tại (hoặc chưa verify)
+
             if (user && user.is_verified) {
                 return res.status(400).json({ success: false, message: "Email này đã được sử dụng." });
             }
-            // Nếu chưa có user -> Tạo user tạm
+
             if (!user) {
                 await pool.query(
                     `INSERT INTO users (email, otp_code, otp_expires_at, is_verified) VALUES ($1, $2, $3, FALSE)`,
                     [email, otp, expiresAt]
                 );
             } else {
-                // Có user nhưng chưa verify -> Update lại OTP
                 await pool.query(
                     `UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE email = $3`,
                     [otp, expiresAt, email]
                 );
             }
         } else if (type === 'forgot') {
-            // Nếu quên mật khẩu: Email bắt buộc phải tồn tại và đã verify
             if (!user || !user.is_verified) {
                 return res.status(400).json({ success: false, message: "Email không tồn tại trong hệ thống." });
             }
-            // Update OTP mới
             await pool.query(
                 `UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE email = $3`,
                 [otp, expiresAt, email]
             );
         }
 
-        // --- GỬI EMAIL THẬT ---
         const mailOptions = {
             from: `"Tomtitmui OS Support" <${process.env.EMAIL_USER}>`,
             to: email,
@@ -128,24 +107,22 @@ app.post('/api/send-otp', async (req, res) => {
                    </div>`
         };
 
-        // Gửi mail (Async)
         await transporter.sendMail(mailOptions);
 
-        console.log(`✅ Đã gửi OTP đến: ${email}`);
+        console.log(`Đã gửi OTP đến: ${email}`);
         res.json({ success: true, message: "Đã gửi mã OTP đến email của bạn." });
 
     } catch (err) {
     console.error("Lỗi gửi OTP:", err);
-    console.error("Chi tiết:", err.message); // Thêm dòng này
+    console.error("Chi tiết:", err.message);
     res.status(500).json({
         success: false,
         message: "Không thể gửi email. Vui lòng kiểm tra lại địa chỉ.",
-        error: err.message // Debug - xóa dòng này khi deploy production
+        error: err.message
     });
 }
 });
 
-// C. Xác nhận Đăng ký (Register Verify)
 app.post('/api/register', async (req, res) => {
     try {
         const { email, password, otp } = req.body;
@@ -155,11 +132,9 @@ app.post('/api/register', async (req, res) => {
 
         if (!user) return res.status(400).json({ success: false, message: "Email không hợp lệ (hãy yêu cầu gửi lại OTP)" });
 
-        // Kiểm tra OTP
         if (user.otp_code !== otp) return res.status(400).json({ success: false, message: "Mã OTP không đúng" });
         if (new Date() > new Date(user.otp_expires_at)) return res.status(400).json({ success: false, message: "Mã OTP đã hết hạn" });
 
-        // Hash password và kích hoạt tài khoản
         const hashedPassword = await hashPassword(password);
 
         await pool.query(
@@ -175,7 +150,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// D. Reset Password (Thêm sau API /api/register, khoảng dòng 147)
 app.post('/api/reset-password', async (req, res) => {
     try {
         const { email, otp, newPassword } = req.body;
@@ -187,7 +161,6 @@ app.post('/api/reset-password', async (req, res) => {
             return res.status(400).json({ success: false, message: "Email không tồn tại" });
         }
 
-        // Kiểm tra OTP
         if (user.otp_code !== otp) {
             return res.status(400).json({ success: false, message: "Mã OTP không đúng" });
         }
@@ -195,7 +168,6 @@ app.post('/api/reset-password', async (req, res) => {
             return res.status(400).json({ success: false, message: "Mã OTP đã hết hạn" });
         }
 
-        // Hash mật khẩu mới
         const hashedPassword = await hashPassword(newPassword);
 
         await pool.query(
@@ -211,8 +183,6 @@ app.post('/api/reset-password', async (req, res) => {
     }
 });
 
-// 3. API LỊCH SỬ CHAT
-// ---------------------------------------------------------
 app.get('/api/chats', async (req, res) => {
     try {
         const { userId } = req.query;
@@ -231,11 +201,9 @@ app.get('/api/messages', async (req, res) => {
     } catch (err) { res.status(500).json([]); }
 });
 
-// Server Listen (Cho Vercel & Local)
 if (require.main === module) {
     app.listen(PORT, () => {
-        console.log(`🚀 Server API đang chạy tại http://localhost:${PORT}`);
+        console.log(`Server API đang chạy tại http://localhost:${PORT}`);
     });
 }
-
 module.exports = app;

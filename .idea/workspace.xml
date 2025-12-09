@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2c71b5ec-cbfa-41e0-b493-a049b68c859a" name="Changes" comment="up 1st file">
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server.js" beforeDir="false" afterPath="$PROJECT_DIR$/server.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/authHelper.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/authHelper.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/sanitize.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/sanitize.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/semanticCache.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/semanticCache.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -214,7 +218,7 @@
       <workItem from="1764279862754" duration="5745000" />
       <workItem from="1764285670084" duration="7491000" />
       <workItem from="1764521061435" duration="47000" />
-      <workItem from="1765222921460" duration="17211000" />
+      <workItem from="1765222921460" duration="19076000" />
     </task>
     <task id="LOCAL-00001" summary="up 1st file">
       <option name="closed" value="true" />
