@@ -14,9 +14,7 @@ const MAX_QUESTION_LENGTH = 500;
 const SIMILARITY_THRESHOLD = 0.55;
 const CHAT_HISTORY_LIMIT = 3;
 
-// ============================================================================
-// LOGGER - Hiển thị trên Vercel
-// ============================================================================
+
 const logger = {
     info: (message, meta = {}) => {
         console.log(JSON.stringify({
@@ -47,9 +45,7 @@ const logger = {
     }
 };
 
-// ============================================================================
-// Lấy lịch sử chat từ Database
-// ============================================================================
+
 async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
     if (!chatId) return "";
 
@@ -76,9 +72,7 @@ async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
     }
 }
 
-// ============================================================================
-// Viết lại câu hỏi dựa trên lịch sử
-// ============================================================================
+
 async function rewriteQuestion(rawQuestion, history, apiKey) {
     const startTime = Date.now();
 
@@ -124,9 +118,6 @@ Câu hỏi viết lại:`;
     }
 }
 
-// ============================================================================
-// Rerank chunks dựa trên mức độ liên quan
-// ============================================================================
 function rerankChunks(results, question) {
     const questionLower = question.toLowerCase();
     const questionWords = questionLower
@@ -137,7 +128,6 @@ function rerankChunks(results, question) {
         let relevanceScore = score;
         const content = doc.pageContent.toLowerCase();
 
-        // Tăng điểm nếu chunk chứa nhiều từ khóa từ câu hỏi
         let keywordMatchCount = 0;
         questionWords.forEach(word => {
             if (content.includes(word)) {
@@ -146,17 +136,14 @@ function rerankChunks(results, question) {
         });
         relevanceScore += keywordMatchCount * 0.05;
 
-        // Tăng điểm nếu chunk có tiêu đề
         if (doc.metadata.title) {
             relevanceScore += 0.1;
         }
 
-        // Tăng điểm cho chunk dài (có nhiều thông tin)
         if (doc.pageContent.length > 500) {
             relevanceScore += 0.05;
         }
 
-        // Tăng điểm nếu có thông tin liên hệ (email, số điện thoại)
         if (/\d{10,11}|@/.test(content)) {
             relevanceScore += 0.08;
         }
@@ -180,9 +167,7 @@ function rerankChunks(results, question) {
     return rankedResults;
 }
 
-// ============================================================================
-// Tạo context từ các chunks
-// ============================================================================
+
 function buildContext(rankedResults, topK = 5) {
     const topChunks = rankedResults.slice(0, topK);
     const uniqueChunks = [];
@@ -215,9 +200,7 @@ function buildContext(rankedResults, topK = 5) {
         .join('\n\n---\n\n');
 }
 
-// ============================================================================
-// Tạo hoặc lấy chatId
-// ============================================================================
+
 async function ensureChatId(chatId, userId, question) {
     if (chatId) return chatId;
 
@@ -240,9 +223,7 @@ async function ensureChatId(chatId, userId, question) {
     }
 }
 
-// ============================================================================
-// Lưu tin nhắn vào database
-// ============================================================================
+
 async function saveMessage(chatId, role, content, sources = null) {
     try {
         await pool.query(
@@ -257,9 +238,6 @@ async function saveMessage(chatId, role, content, sources = null) {
     }
 }
 
-// ============================================================================
-// MAIN HANDLER
-// ============================================================================
 module.exports = async (req, res) => {
     const requestId = Math.random().toString(36).substring(7);
     const startTime = Date.now();
@@ -277,9 +255,7 @@ module.exports = async (req, res) => {
     try {
         let { question, userId = 1, chatId } = req.body;
 
-        // ========================================
-        // VALIDATION
-        // ========================================
+
         if (!userId || userId < 1) {
             return res.status(400).json({ error: "userId không hợp lệ" });
         }
@@ -299,26 +275,19 @@ module.exports = async (req, res) => {
 
         logger.info('Question received', { requestId, question });
 
-        // ========================================
-        // LẤY LỊCH SỬ CHAT
-        // ========================================
+
         let chatHistory = "";
         if (chatId) {
             chatHistory = await getChatHistory(chatId);
         }
 
-        // ========================================
-        // VIẾT LẠI CÂU HỎI
-        // ========================================
         const refinedQuestion = await rewriteQuestion(
             question,
             chatHistory,
             process.env.ANTHROPIC_API_KEY
         );
 
-        // ========================================
-        // TẠO EMBEDDING
-        // ========================================
+
         logger.info('Creating embedding', { requestId });
         const embeddings = new GoogleGenerativeAIEmbeddings({
             model: "models/text-embedding-004",
@@ -327,18 +296,33 @@ module.exports = async (req, res) => {
 
         const queryVector = await embeddings.embedQuery(refinedQuestion);
 
-        // ========================================
-        // KIỂM TRA CACHE (SAU KHI REWRITE)
-        // ========================================
-        const cachedAnswer = await findInSemanticCache(queryVector);
+        logger.info('Embedding created', {
+            requestId,
+            vectorLength: queryVector?.length,
+            vectorType: typeof queryVector
+        });
+
+        let cachedAnswer = null;
+        try {
+            if (queryVector && Array.isArray(queryVector) && queryVector.length > 0) {
+                cachedAnswer = await findInSemanticCache(refinedQuestion, queryVector);
+                logger.info('Cache checked', { requestId, found: !!cachedAnswer });
+            } else {
+                logger.warn('Invalid query vector, skipping cache', {
+                    requestId,
+                    vectorType: typeof queryVector,
+                    isArray: Array.isArray(queryVector)
+                });
+            }
+        } catch (cacheError) {
+            logger.error('Cache check failed', cacheError);
+        }
 
         if (cachedAnswer) {
             logger.info('Cache HIT', { requestId });
 
-            // Đảm bảo có chatId
             chatId = await ensureChatId(chatId, userId, question);
 
-            // Lưu cả câu hỏi và câu trả lời
             await saveMessage(chatId, 'user', question);
             await saveMessage(chatId, 'assistant', cachedAnswer, { source: "cache" });
 
@@ -354,9 +338,7 @@ module.exports = async (req, res) => {
 
         logger.info('Cache MISS', { requestId });
 
-        // ========================================
-        // TÌM KIẾM PINECONE
-        // ========================================
+
         logger.info('Searching Pinecone', { requestId });
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
         const index = pinecone.Index(PINECONE_INDEX_NAME);
@@ -387,9 +369,6 @@ module.exports = async (req, res) => {
             logger.warn('No relevant documents found', { requestId });
         }
 
-        // ========================================
-        // TẠO CÂU TRẢ LỜI VỚI CLAUDE
-        // ========================================
         logger.info('Calling Claude API', { requestId });
         const model = new ChatAnthropic({
             modelName: MODEL_NAME,
@@ -452,16 +431,19 @@ BẮT ĐẦU TRẢ LỜI:
             answerLength: answer.length
         });
 
-        // ========================================
-        // LƯU VÀO DATABASE & CACHE
-        // ========================================
         chatId = await ensureChatId(chatId, userId, question);
 
-        await Promise.all([
-            saveMessage(chatId, 'user', question),
-            saveMessage(chatId, 'assistant', answer, sources),
-            saveToSemanticCache(refinedQuestion, answer, queryVector)
-        ]);
+        await saveMessage(chatId, 'user', question);
+        await saveMessage(chatId, 'assistant', answer, sources);
+
+        try {
+            if (queryVector && Array.isArray(queryVector) && queryVector.length > 0) {
+                await saveToSemanticCache(refinedQuestion, answer, queryVector);
+                logger.info('Answer cached successfully', { requestId });
+            }
+        } catch (cacheError) {
+            logger.error('Failed to save to cache', cacheError);
+        }
 
         const duration = Date.now() - startTime;
         logger.info('Request completed successfully', {
