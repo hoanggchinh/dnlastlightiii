@@ -1,14 +1,17 @@
 const { pool } = require('./db');
 
-const SIMILARITY_THRESHOLD = 0.92;
+const SIMILARITY_THRESHOLD = 0.94; // Giảm từ 0.95 xuống 0.92 để dễ hit cache hơn
 
+// ============================================================================
+// LOGGER
+// ============================================================================
 const logger = {
     info: (message, meta = {}) => {
         console.log(JSON.stringify({
             level: 'info',
             message,
             timestamp: new Date().toISOString(),
-            ...meta
+            ...sanitizeMeta(meta)
         }));
     },
     warn: (message, meta = {}) => {
@@ -16,23 +19,52 @@ const logger = {
             level: 'warn',
             message,
             timestamp: new Date().toISOString(),
-            ...meta
+            ...sanitizeMeta(meta)
         }));
     },
     error: (message, error = null) => {
+        const errorInfo = error ? {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } : undefined;
+
         console.error(JSON.stringify({
             level: 'error',
             message,
             timestamp: new Date().toISOString(),
-            error: error ? {
-                message: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-            } : undefined
+            error: errorInfo
         }));
     }
 };
 
+// Helper: Loại bỏ HTML và dữ liệu quá dài khỏi logs
+function sanitizeMeta(meta) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(meta)) {
+        if (typeof value === 'string') {
+            // Nếu là HTML, chỉ log metadata
+            if (value.includes('<!DOCTYPE') || value.includes('<html')) {
+                sanitized[key] = '[HTML Content - ' + value.length + ' chars]';
+            }
+            // Nếu quá dài (>500 chars), cắt bớt
+            else if (value.length > 500) {
+                sanitized[key] = value.substring(0, 500) + '... [truncated]';
+            }
+            else {
+                sanitized[key] = value;
+            }
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+}
 
+// ============================================================================
+// Tìm câu trả lời trong cache
+// ============================================================================
 async function findInSemanticCache(userQuestion, queryVector) {
     try {
         // Validate input
@@ -52,8 +84,12 @@ async function findInSemanticCache(userQuestion, queryVector) {
             return null;
         }
 
+        // Chuyển array thành string vector format của PostgreSQL
         const vectorString = `[${queryVector.join(',')}]`;
 
+        // Query tìm kiếm kết hợp:
+        // 1. Vector similarity (embedding <=> $1)
+        // 2. Text search matching (to_tsvector)
         const query = `
             SELECT 
                 answer, 
@@ -97,7 +133,9 @@ async function findInSemanticCache(userQuestion, queryVector) {
     }
 }
 
-
+// ============================================================================
+// Lưu câu trả lời vào cache
+// ============================================================================
 async function saveToSemanticCache(question, answer, queryVector) {
     try {
         // Validate input
@@ -124,12 +162,14 @@ async function saveToSemanticCache(question, answer, queryVector) {
             return;
         }
 
+        // Giới hạn độ dài question để tránh duplicate
         const normalizedQuestion = question.trim().substring(0, 500);
 
         const vectorString = `[${queryVector.join(',')}]`;
 
         const startTime = Date.now();
 
+        // Kiểm tra xem câu hỏi đã tồn tại chưa
         const checkQuery = `
             SELECT id FROM semantic_cache 
             WHERE question = $1 
@@ -138,6 +178,7 @@ async function saveToSemanticCache(question, answer, queryVector) {
         const { rows: existingRows } = await pool.query(checkQuery, [normalizedQuestion]);
 
         if (existingRows.length > 0) {
+            // Update câu trả lời cũ
             await pool.query(
                 `UPDATE semantic_cache 
                  SET answer = $1, embedding = $2::vector, created_at = NOW()
@@ -174,6 +215,9 @@ async function saveToSemanticCache(question, answer, queryVector) {
     }
 }
 
+// ============================================================================
+// Xóa cache cũ (Optional - chạy định kỳ)
+// ============================================================================
 async function cleanOldCache(daysOld = 30) {
     try {
         const result = await pool.query(
