@@ -43,7 +43,9 @@
     const DISK_TILT_ANGLE = Math.PI / 3.0;
 
     // 3. ĐỊNH NGHĨA SHADER (Hiệu ứng thấu kính hấp dẫn)
+    // 3. ĐỊNH NGHĨA SHADER (Đã sửa lỗi Precision và cấu trúc)
     const lensingShader = {
+        name: 'LensingShader', // Thêm tên để dễ debug
         uniforms: {
             "tDiffuse": { value: null },
             "blackHoleScreenPos": { value: new THREE.Vector2(0.5, 0.5) },
@@ -60,27 +62,32 @@
             }
         `,
         fragmentShader: `
+            // QUAN TRỌNG: Khai báo độ chính xác cho số thực
+            precision highp float;
+
             uniform sampler2D tDiffuse;
             uniform vec2 blackHoleScreenPos;
             uniform float lensingStrength;
             uniform float lensingRadius;
             uniform float aspectRatio;
             uniform float chromaticAberration;
+
             varying vec2 vUv;
 
             void main() {
                 vec2 uv = vUv;
                 vec2 offset = uv - blackHoleScreenPos;
                 offset.x *= aspectRatio;
+
                 float dist = length(offset);
 
-                // Vùng sự kiện (Event Horizon)
+                // Vùng sự kiện (Event Horizon) - Màu đen tuyệt đối
                 if (dist < 0.05) {
                     gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                     return;
                 }
 
-                // Tính toán độ cong ánh sáng
+                // Tính toán độ cong
                 float distortion = lensingStrength / dist;
                 float falloff = smoothstep(lensingRadius, 0.0, dist);
                 distortion *= falloff;
@@ -88,6 +95,7 @@
                 vec2 direction = normalize(offset);
 
                 // Hiệu ứng quang sai màu (Chromatic Aberration)
+                // Kẹp giá trị UV (clamp) để tránh lỗi texture lặp lại ở mép
                 vec2 uvR = uv - direction * distortion * (1.0 + chromaticAberration);
                 vec2 uvG = uv - direction * distortion;
                 vec2 uvB = uv - direction * distortion * (1.0 - chromaticAberration);
