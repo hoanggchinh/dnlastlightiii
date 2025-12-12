@@ -24,9 +24,7 @@ function detectXSS(input) {
 function sanitizeQuestion(question) {
   if (!question || typeof question !== 'string') return "";
 
-  if (detectXSS(question)) {
-    throw new Error('XSS_DETECTED');
-  }
+  const hasXSS = detectXSS(question);
 
   let cleaned = question.trim().replace(/\s+/g, ' ');
 
@@ -52,7 +50,10 @@ function sanitizeQuestion(question) {
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
 
-  return cleaned.substring(0, 1000);
+  return {
+    sanitized: cleaned.substring(0, 1000),
+    hasXSS
+  };
 }
 
 function normalizeForMatching(question) {
