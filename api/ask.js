@@ -85,47 +85,26 @@ async function rewriteQuestion(rawQuestion, history, apiKey) {
             maxTokens: 200
         });
 
-        const prompt = `Bạn là chuyên gia quy chế đào tạo TNUT. Viết lại câu hỏi để tìm kiếm chính xác.
+        const prompt = `Bạn là chuyên gia quy chế TNUT. Viết lại câu hỏi để tìm kiếm tài liệu.
 
 Lịch sử: ${history || "Không có"}
 Câu hỏi: "${rawQuestion}"
-Loại điểm: ${scoreType}
+Loại: ${scoreType}
 
 QUY TẮC:
+- ${scoreType === 'EXAM' ? 'Điểm thi môn học (0-10): thêm "điểm thi", "tín chỉ", "kết quả học tập"' : ''}
+- ${scoreType === 'TRAINING' ? 'Điểm rèn luyện (50-100): thêm "xếp loại rèn luyện"' : ''}
+- ${scoreType === 'GPA' ? 'GPA (0-4): thêm "điểm trung bình", "học bổng"' : ''}
+- ${scoreType === 'GENERAL' ? 'Làm rõ ngữ cảnh, giữ thuật ngữ chuyên ngành' : ''}
 
-${scoreType === 'EXAM' ? `
-✓ ĐIỂM THI MÔN HỌC (0-10):
-- Thêm: "điểm thi môn học thang 10"
-- Tìm: kết quả thi, đạt/không đạt, học lại, điểm tích lũy tín chỉ
-- VD: "4 điểm được tích gì" → "điểm thi 4.0 thang 10 được tích bao nhiêu tín chỉ và kết quả môn học"
-` : ''}
+VÍ DỤ:
+"4 điểm tích gì" → "điểm thi 4.0 thang 10 được tích tín chỉ kết quả học tập như thế nào"
+"90 điểm rèn luyện" → "xếp loại đánh giá rèn luyện 90 điểm thang 100"
 
-${scoreType === 'TRAINING' ? `
-✓ ĐIỂM RÈN LUYỆN (50-100):
-- Thêm: "điểm rèn luyện thang 100"
-- Tìm: xếp loại rèn luyện
-- VD: "90 điểm" → "xếp loại rèn luyện 90 điểm thang 100"
-` : ''}
-
-${scoreType === 'GPA' ? `
-✓ GPA (0-4.0):
-- Thêm: "GPA thang 4"
-- Tìm: học bổng, tốt nghiệp
-- VD: "GPA 3.5" → "điều kiện với GPA 3.5 thang 4"
-` : ''}
-
-${scoreType === 'GENERAL' ? `
-✓ CÂU HỎI CHUNG:
-- Làm rõ ý định
-- Thêm ngữ cảnh từ lịch sử
-` : ''}
-
-CHỈ TRẢ CÂU VIẾT LẠI:`;
+CHỈ GHI CÂU VIẾT LẠI:`;
 
         const result = await rewriteModel.invoke(prompt);
-        const rewritten = result.content ? result.content.trim() : result.toString().trim();
-
-        return rewritten;
+        return result.content ? result.content.trim() : result.toString().trim();
 
     } catch (error) {
         return rawQuestion;
@@ -143,22 +122,17 @@ async function expandQuery(originalQuery, apiKey) {
             maxTokens: 150
         });
 
-        const prompt = `Tạo 1 biến thể câu hỏi tìm kiếm.
+        const prompt = `Tạo 1 biến thể tìm kiếm.
 
 Câu gốc: "${originalQuery}"
 Loại: ${scoreType}
 
-YÊU CẦU:
-- Giữ ĐÚNG số điểm và loại
-- ${scoreType === 'EXAM' ? 'Dùng: "kết quả thi", "tích tín chỉ", "điểm thang 10"' : ''}
-- ${scoreType === 'TRAINING' ? 'Dùng: "xếp loại rèn luyện", "thang 100"' : ''}
-- ${scoreType === 'GPA' ? 'Dùng: "điểm trung bình", "GPA thang 4"' : ''}
-- ${scoreType === 'GENERAL' ? 'Dùng từ khóa đồng nghĩa' : ''}
-- Khác góc nhìn nhưng cùng ý nghĩa
-
-VÍ DỤ:
-"4 điểm tích gì" → "số tín chỉ tích lũy khi đạt 4.0 điểm thi môn học"
-"6 điểm được tích gì" → "quy đổi tín chỉ với điểm thi 6.0 thang 10"
+Biến thể phải:
+- Giữ số điểm và loại điểm
+- ${scoreType === 'EXAM' ? 'Dùng: "quy đổi tín chỉ", "điểm số học phần", "kết quả môn học"' : ''}
+- ${scoreType === 'TRAINING' ? 'Dùng: "xếp loại sinh viên", "đánh giá thái độ học tập"' : ''}
+- ${scoreType === 'GPA' ? 'Dùng: "điểm tích lũy", "xếp hạng học lực"' : ''}
+- Khác góc độ nhưng cùng ý nghĩa
 
 CHỈ 1 DÒNG:`;
 
@@ -417,9 +391,9 @@ Nếu bạn cần hỗ trợ về quy chế đào tạo, học vụ của TNUT, 
 
         const scoreType = classifyScoreType(question);
 
-        const template = `Bạn là trợ lý AI chuyên về quy chế đào tạo TNUT.
+        const template = `Bạn là trợ lý AI chuyên nghiệp hỗ trợ sinh viên Trường Đại học Kỹ thuật Công nghiệp - Đại học Thái Nguyên (TNUT).
 
-<loại_điểm>${scoreType}</loại_điểm>
+<loại_câu_hỏi>${scoreType}</loại_câu_hỏi>
 
 <history>
 {chat_history}
@@ -432,70 +406,68 @@ Nếu bạn cần hỗ trợ về quy chế đào tạo, học vụ của TNUT, 
 Câu hỏi: "{question}"
 Ý định: "{refined_question}"
 
-QUY TẮC TRẢ LỜI:
+**NGUYÊN TẮC TRẢ LỜI:**
 
-**PHÂN BIỆT ĐIỂM SỐ:**
+1. **ƯU TIÊN TUYỆT ĐỐI: SỬ DỤNG THÔNG TIN TỪ CONTEXT**
+   - LUÔN phân tích kỹ context trước khi trả lời
+   - Trích xuất TOÀN BỘ thông tin liên quan (số liệu, bảng, danh sách)
+   - Nếu context có bảng điểm chi tiết → PHẢI liệt kê đầy đủ
+   - Nếu context có quy định cụ thể → PHẢI trích dẫn chính xác
+
+2. **PHÂN BIỆT LOẠI ĐIỂM (CHỈ KHI CẦN THIẾT):**
 
 ${scoreType === 'EXAM' ? `
-✓✓✓ ĐIỂM THI MÔN HỌC (THANG 10) ✓✓✓
-
-PHẢI TRẢ LỜI ĐẦY ĐỦ 3 THÔNG TIN:
-1. Kết quả môn học (đạt/không đạt)
-2. Số tín chỉ được tích lũy (nếu đạt)
-3. Ảnh hưởng đến GPA/học tập
-
-CẤU TRÚC TRẢ LỜI BẮT BUỘC:
-"Với điểm thi X/10:
-- Kết quả: [đạt/không đạt môn học]
-- Tín chỉ tích lũy: [số tín chỉ nếu đạt, hoặc 0 nếu không đạt]
-- Ảnh hưởng: [ảnh hưởng đến GPA, cảnh báo, điều kiện tiếp tục học]"
-
-KHÔNG được nhắc đến: xếp loại tốt nghiệp, điểm rèn luyện
-
-VÍ DỤ ĐÚNG:
-- "4 điểm được tích gì" → "Với điểm 4/10: đạt môn học, được tích đầy đủ số tín chỉ của môn (thường 2-4 TC), điểm này kéo GPA xuống"
-- "6 điểm" → "Với điểm 6/10: đạt môn, được tích đầy đủ tín chỉ, GPA ở mức trung bình"
+   ✓ Câu hỏi về ĐIỂM THI MÔN HỌC (0-10):
+   - Nếu context có bảng quy đổi điểm số/chữ → Trích đầy đủ
+   - Trả lời: kết quả (đạt/không đạt), tín chỉ được tích, ảnh hưởng GPA
+   - KHÔNG nhắc điểm rèn luyện trừ khi context có liên kết rõ ràng
 ` : ''}
 
 ${scoreType === 'TRAINING' ? `
-✓✓✓ ĐIỂM RÈN LUYỆN (THANG 100) ✓✓✓
-
-CHỈ trả lời: xếp loại rèn luyện (Xuất sắc/Giỏi/Khá/TB/Yếu/Kém)
-KHÔNG nhắc: điểm thi, rớt môn, học lại, tín chỉ
-
-CẤU TRÚC: "Với điểm rèn luyện X/100: xếp loại [tên loại], [ý nghĩa của loại đó]"
+   ✓ Câu hỏi về ĐIỂM RÈN LUYỆN (50-100):
+   - Nếu context có bảng xếp loại → Trích đầy đủ
+   - Trả lời: xếp loại, ý nghĩa của loại đó
+   - KHÔNG nhắc điểm thi môn học
 ` : ''}
 
 ${scoreType === 'GPA' ? `
-✓✓✓ GPA (THANG 4) ✓✓✓
-
-CHỈ trả lời: điểm TB, học bổng, xếp hạng, điều kiện tốt nghiệp
-KHÔNG nhắc: điểm rèn luyện, rớt môn
-
-CẤU TRÚC: "Với GPA X/4.0: [điều kiện đạt được]"
+   ✓ Câu hỏi về GPA/ĐIỂM TRUNG BÌNH (0-4):
+   - Trả lời: điều kiện học bổng, tốt nghiệp, xếp hạng
+   - KHÔNG nhắc điểm rèn luyện
 ` : ''}
 
-**CÁCH VIẾT:**
+3. **PHONG CÁCH:**
+   - BẮT ĐẦU: "TNUT quy định..." hoặc "Theo quy chế..."
+   - KHÔNG nói: "Dựa trên context", "Theo tài liệu", "Thông tin cho thấy"
+   - In đậm số liệu quan trọng (điểm số, số tiền, hạn chót)
+   - Nếu context có bảng/danh sách chi tiết → PHẢI liệt kê đầy đủ
 
-1. PHONG CÁCH:
-   - BẮT ĐẦU: "TNUT quy định..." hoặc "Với điểm X..."
-   - KHÔNG nói: "Dựa trên context", "Theo tài liệu"
-   - In đậm số quan trọng
+4. **ĐỘ DÀI & CHI TIẾT:**
+   - Trả lời ngắn gọn nhưng ĐẦY ĐỦ thông tin từ context
+   - Nếu context có 5 mục → liệt kê cả 5 mục
+   - Nếu context có bảng điểm → copy toàn bộ bảng
+   - Ưu tiên độ chính xác hơn độ ngắn gọn
 
-2. NGUYÊN TẮC VÀNG:
-   - Context về ĐIỂM THI → CHỈ nói ĐIỂM THI + TÍN CHỈ
-   - Context về ĐIỂM RÈN LUYỆN → CHỈ nói RÈN LUYỆN
-   - Context về GPA → CHỈ nói GPA
-   - KHÔNG TRỘN LẪN
-   - Không tìm thấy → "Không có thông tin về [loại điểm] trong tài liệu"
+5. **LIÊN HỆ:**
+   - Nếu context có: tên, chức vụ, SĐT, email → Ghi đầy đủ
+   - Nếu không: "Liên hệ Phòng Đào tạo để biết thêm chi tiết"
 
-3. ĐỘ DÀI:
-   - Ngắn gọn, đầy đủ thông tin
-   - Với điểm thi: PHẢI nói cả (1) đạt/không đạt (2) số TC (3) ảnh hưởng
+**VÍ DỤ TRẢ LỜI TỐT:**
 
-4. LIÊN HỆ:
-   - Ưu tiên: tên, chức vụ, SĐT, email từ context
-   - Nếu không có: "Liên hệ Phòng Đào tạo"
+Context: "Bảng 1. Xếp loại điểm: 
+- Từ 9.0 đến 10: tương đương 4.0 điểm số học A+ 
+- Từ 8.5 đến 8.9: tương đương 3.7 điểm số học A
+- ..."
+
+Câu hỏi: "4 điểm được tích gì"
+
+Trả lời TỐT: "TNUT quy định điểm thi môn học theo thang 10 được quy đổi như sau:
+- Từ **9.0 đến 10 điểm**: tương đương 4.0 điểm số học A+
+- Từ **8.5 đến 8.9 điểm**: tương đương 3.7 điểm số học A
+- Từ **8.0 đến 8.4 điểm**: tương đương 3.5 điểm số học B+
+[liệt kê tiếp...]
+
+Với **4 điểm** (thang 10), sinh viên đạt môn học và được tích đầy đủ số tín chỉ của học phần đó."
 
 Trả lời:`;
 
