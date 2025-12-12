@@ -58,15 +58,20 @@ Câu hỏi: "${rawQuestion}"
 THUẬT NGỮ TNUT (quan trọng):
 - "điểm tích", "X điểm tích" (X >= 50) → "xếp loại rèn luyện", "điểm rèn luyện"
 - Điểm 50-100 = điểm rèn luyện (thang 100)
-- Điểm 1-10 = điểm thi môn học (thang 10)
+- Điểm 1-10 = điểm thi môn học (thang 10) HOẶC điểm chữ A/B/C/D/F (thang 4)
 - "rớt môn", "trượt môn", "fail" → "học lại", "không đạt môn học"
 - "GPA", "điểm TB", "điểm trung bình" → "điểm trung bình tích lũy"
 - "học phí", "tiền học" → "mức học phí"
 - "thi lại", "kiểm tra lại" → "thi cải thiện điểm"
+- "điểm A", "điểm B", "điểm C", "điểm D", "điểm F" → "thang điểm chữ 4.0"
+- "3 điểm", "3.5 điểm" (nếu < 10) → "điểm thi môn học hoặc GPA"
 
 YÊU CẦU:
 1. Nếu câu hỏi thiếu ngữ cảnh, DÙNG LỊCH SỬ để bổ sung
-2. Phân biệt rõ: số 1-10 là điểm thi, số 50-100 là điểm rèn luyện
+2. Phân biệt rõ: 
+   - Số 1-10: điểm thi môn học (thang 10) HOẶC GPA (thang 4)
+   - Số 50-100: điểm rèn luyện (thang 100)
+   - Chữ A/B/C/D/F: thang điểm chữ 4.0
 3. Chuyển thuật ngữ sinh viên → thuật ngữ quy chế
 4. CHỈ TRẢ VỀ CÂU VIẾT LẠI, KHÔNG GIẢI THÍCH
 
@@ -100,12 +105,14 @@ PHƯƠNG PHÁP TẠO BIẾN THỂ:
    - "xếp loại rèn luyện" → "điều kiện xếp loại rèn luyện sinh viên TNUT"
    - "học phí" → "mức học phí đào tạo đại học chính quy"
    - "thi lại" → "quy định thi cải thiện điểm môn học"
+   - "điểm A/B/C/D" → "thang điểm chữ 4.0 quy đổi tín chỉ"
    - Thêm: điều kiện, quy định, mức, thủ tục, tiêu chuẩn (nếu phù hợp)
 
 2. **Biến thể đồng nghĩa/liên quan** - Dùng thuật ngữ khác:
    - "điểm rèn luyện" → "đánh giá kết quả rèn luyện sinh viên"
    - "tốt nghiệp" → "điều kiện công nhận tốt nghiệp đại học"
    - "học bổng" → "xét cấp học bổng khuyến khích học tập"
+   - "GPA" → "điểm trung bình tích lũy hệ số 4"
    - Dùng: đánh giá, xét, cấp, công nhận, thực hiện (nếu phù hợp)
 
 3. **Biến thể khác góc nhìn** - Hỏi từ khía cạnh khác:
@@ -114,8 +121,9 @@ PHƯƠNG PHÁP TẠO BIẾN THỂ:
    - "có được không?" → "điều kiện đủ để thực hiện"
 
 THUẬT NGỮ TNUT CẦN LƯU Ý:
-- Điểm 1-10: điểm thi môn học (thang 10)
+- Điểm 0-10: có thể là điểm thi môn học (thang 10) HOẶC GPA (thang 4)
 - Điểm 50-100: điểm rèn luyện (thang 100)
+- Điểm A/B/C/D/F: thang điểm chữ (hệ 4.0)
 - "học lại" = không đạt môn học
 - "thi cải thiện" = thi lại để nâng điểm
 
@@ -132,10 +140,15 @@ Output:
 điều kiện xếp loại xuất sắc rèn luyện sinh viên TNUT là bao nhiêu điểm
 tiêu chuẩn đánh giá kết quả rèn luyện xếp hạng cao nhất
 
-Input: "học phí là bao nhiêu?"
+Input: "3 điểm được tích gì?"
 Output:
-mức học phí đào tạo đại học chính quy TNUT hiện nay
-quy định thu học phí theo năm học mới nhất
+điểm trung bình tích lũy GPA 3.0 quy đổi thang điểm chữ như thế nào
+điểm thi môn học đạt 3.0 tương ứng xếp loại gì
+
+Input: "điểm A là bao nhiêu?"
+Output:
+thang điểm chữ A quy đổi sang điểm số hệ 4.0 là bao nhiêu
+tiêu chuẩn đạt điểm A trong hệ thống tín chỉ TNUT
 
 Bây giờ hãy tạo 2 biến thể cho câu hỏi trên:`;
 
@@ -287,8 +300,6 @@ async function saveMessage(chatId, role, content, sources = null) {
 }
 
 module.exports = async (req, res) => {
-    const requestId = Math.random().toString(36).substring(7);
-
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
     }
@@ -419,9 +430,13 @@ QUY TẮC TRẢ LỜI:
    - In đậm số liệu quan trọng (số tiền, điểm số, hạn chót)
 
 2. PHÂN BIỆT ĐIỂM SỐ (RẤT QUAN TRỌNG):
-   - Điểm 1-10: Điểm thi môn học (thang 10) - VD: "đạt 5.0", "điểm A"
+   - Điểm 0-4.0: GPA hoặc thang điểm chữ (A/B/C/D/F) - VD: "GPA 3.5", "điểm A = 4.0"
+   - Điểm 5.0-10: Điểm thi môn học (thang 10) - VD: "đạt 8.0", "điểm thi 7.5"
    - Điểm 50-100: Điểm rèn luyện (thang 100) - VD: "đạt 90 điểm rèn luyện", "xếp loại Xuất sắc"
-   - KHÔNG nhầm lẫn giữa 2 loại điểm này
+   - KHÔNG nhầm lẫn giữa 3 loại điểm này
+   - Nếu context nói về GPA/điểm chữ thì TRẢ LỜI về GPA/điểm chữ
+   - Nếu context nói về điểm rèn luyện thì TRẢ LỜI về điểm rèn luyện
+   - CHỈ TRẢ LỜI những gì có trong context, KHÔNG suy đoán
 
 3. ĐỘ DÀI:
    - Trả lời NGẮN GỌN, đi thẳng vào vấn đề
@@ -481,8 +496,7 @@ Trả lời:`;
         console.error('Request failed:', error.message);
 
         res.status(500).json({
-            error: "Lỗi hệ thống. Vui lòng thử lại sau.",
-            requestId
+            error: "Lỗi hệ thống. Vui lòng thử lại sau."
         });
     }
 };

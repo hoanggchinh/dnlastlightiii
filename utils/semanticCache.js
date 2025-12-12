@@ -1,8 +1,9 @@
 const { pool } = require('./db');
 const { normalizeForMatching, extractKeywords } = require('./sanitize');
 
-const SIMILARITY_THRESHOLD = 0.92;
-const KEYWORD_MATCH_THRESHOLD = 0.6;
+const SIMILARITY_THRESHOLD = 0.95;
+const KEYWORD_MATCH_THRESHOLD = 0.75;
+const CACHE_TTL_MINUTES = 5;
 
 async function findInSemanticCache(userQuestion, queryVector) {
     try {
@@ -18,6 +19,10 @@ async function findInSemanticCache(userQuestion, queryVector) {
         const normalizedQuestion = normalizeForMatching(userQuestion);
         const userKeywords = extractKeywords(userQuestion);
 
+        if (userKeywords.length < 2) {
+            return null;
+        }
+
         const query = `
             SELECT 
                 id,
@@ -27,13 +32,14 @@ async function findInSemanticCache(userQuestion, queryVector) {
                 1 - (embedding <=> $1::vector) as similarity
             FROM semantic_cache
             WHERE 1 - (embedding <=> $1::vector) > $2
+            AND created_at > NOW() - INTERVAL '${CACHE_TTL_MINUTES} minutes'
             ORDER BY similarity DESC
-            LIMIT 5;
+            LIMIT 3;
         `;
 
         const { rows } = await pool.query(query, [
             vectorString,
-            SIMILARITY_THRESHOLD - 0.05
+            SIMILARITY_THRESHOLD
         ]);
 
         if (rows.length === 0) {
@@ -46,22 +52,42 @@ async function findInSemanticCache(userQuestion, queryVector) {
         for (const row of rows) {
             const cachedKeywords = row.keywords || [];
 
-            const matchCount = userKeywords.filter(k =>
-                cachedKeywords.some(ck =>
-                    ck.includes(k) || k.includes(ck)
-                )
-            ).length;
+            let exactMatchCount = 0;
+            let partialMatchCount = 0;
 
-            const keywordScore = matchCount / Math.max(userKeywords.length, 1);
-            const combinedScore = (row.similarity * 0.7) + (keywordScore * 0.3);
+            userKeywords.forEach(userWord => {
+                const hasExactMatch = cachedKeywords.some(ck =>
+                    ck === userWord || userWord === ck
+                );
+                const hasPartialMatch = cachedKeywords.some(ck =>
+                    (ck.includes(userWord) && userWord.length > 3) ||
+                    (userWord.includes(ck) && ck.length > 3)
+                );
 
-            if (combinedScore > bestScore && keywordScore >= KEYWORD_MATCH_THRESHOLD) {
+                if (hasExactMatch) {
+                    exactMatchCount++;
+                } else if (hasPartialMatch) {
+                    partialMatchCount++;
+                }
+            });
+
+            const totalKeywords = Math.max(userKeywords.length, cachedKeywords.length);
+            const keywordScore = (exactMatchCount * 1.0 + partialMatchCount * 0.3) / totalKeywords;
+
+            const combinedScore = (row.similarity * 0.6) + (keywordScore * 0.4);
+
+            const requiredMinScore = 0.85;
+
+            if (combinedScore > bestScore &&
+                keywordScore >= KEYWORD_MATCH_THRESHOLD &&
+                exactMatchCount >= Math.min(2, userKeywords.length) &&
+                combinedScore >= requiredMinScore) {
                 bestScore = combinedScore;
                 bestMatch = row;
             }
         }
 
-        if (bestMatch && bestScore > 0.75) {
+        if (bestMatch && bestScore >= 0.85) {
             return bestMatch.answer;
         }
 
@@ -114,13 +140,17 @@ async function saveToSemanticCache(question, answer, queryVector) {
     }
 }
 
-async function cleanOldCache(daysOld = 30) {
+async function cleanExpiredCache() {
     try {
         const result = await pool.query(
             `DELETE FROM semantic_cache 
-             WHERE created_at < NOW() - INTERVAL '${daysOld} days'
+             WHERE created_at < NOW() - INTERVAL '${CACHE_TTL_MINUTES} minutes'
              RETURNING id`
         );
+
+        if (result.rowCount > 0) {
+            console.log(`Cleaned ${result.rowCount} expired cache entries`);
+        }
 
         return result.rowCount;
     } catch (error) {
@@ -129,8 +159,19 @@ async function cleanOldCache(daysOld = 30) {
     }
 }
 
+function startCacheCleanupJob() {
+    const cleanupIntervalMs = CACHE_TTL_MINUTES * 60 * 1000;
+
+    setInterval(async () => {
+        await cleanExpiredCache();
+    }, cleanupIntervalMs);
+
+    console.log(`Cache cleanup job started: running every ${CACHE_TTL_MINUTES} minutes`);
+}
+
 module.exports = {
     findInSemanticCache,
     saveToSemanticCache,
-    cleanOldCache
+    cleanExpiredCache,
+    startCacheCleanupJob
 };
