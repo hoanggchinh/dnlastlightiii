@@ -2,7 +2,21 @@ function sanitizeQuestion(question) {
   if (!question || typeof question !== 'string') return "";
 
   let cleaned = question.trim().replace(/\s+/g, ' ');
-  cleaned = cleaned.replace(/[<>{}[\]\\]/g, '');
+
+  // Loại bỏ HTML tags hoàn toàn
+  cleaned = cleaned.replace(/<[^>]*>/g, '');
+
+  // Loại bỏ ký tự đặc biệt nguy hiểm
+  cleaned = cleaned.replace(/[{}[\]\\]/g, '');
+
+  // Escape các ký tự HTML entities còn sót
+  cleaned = cleaned
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
 
   return cleaned.substring(0, 1000);
 }
