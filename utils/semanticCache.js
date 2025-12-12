@@ -205,7 +205,7 @@ async function saveToSemanticCache(question, answer, queryVector) {
     }
 }
 
-async function cleanOldCache(daysOld = 30) {
+async function cleanOldCache(daysOld = 7) {
     try {
         const result = await pool.query(
             `DELETE FROM semantic_cache 
