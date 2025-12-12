@@ -14,6 +14,60 @@ const MAX_QUESTION_LENGTH = 500;
 const SIMILARITY_THRESHOLD = 0.55;
 const CHAT_HISTORY_LIMIT = 3;
 
+const logger = {
+    info: (message, meta = {}) => {
+        console.log(JSON.stringify({
+            level: 'info',
+            message,
+            timestamp: new Date().toISOString(),
+            ...sanitizeMeta(meta)
+        }));
+    },
+    warn: (message, meta = {}) => {
+        console.warn(JSON.stringify({
+            level: 'warn',
+            message,
+            timestamp: new Date().toISOString(),
+            ...sanitizeMeta(meta)
+        }));
+    },
+    error: (message, error = null) => {
+        const errorInfo = error ? {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } : undefined;
+
+        console.error(JSON.stringify({
+            level: 'error',
+            message,
+            timestamp: new Date().toISOString(),
+            error: errorInfo
+        }));
+    }
+};
+
+function sanitizeMeta(meta) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(meta)) {
+        if (typeof value === 'string') {
+            if (value.includes('<!DOCTYPE') || value.includes('<html')) {
+                sanitized[key] = '[HTML Content - ' + value.length + ' chars]';
+            }
+            else if (value.length > 500) {
+                sanitized[key] = value.substring(0, 500) + '... [truncated]';
+            }
+            else {
+                sanitized[key] = value;
+            }
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+}
+
 async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
     if (!chatId) return "";
 
@@ -32,7 +86,7 @@ async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
             return `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`;
         }).join('\n');
     } catch (error) {
-        console.error('Failed to load chat history:', error.message);
+        logger.error('Failed to load chat history', error);
         return "";
     }
 }
@@ -46,37 +100,34 @@ async function rewriteQuestion(rawQuestion, history, apiKey) {
             maxTokens: 200
         });
 
-        const prompt = `Bạn là chuyên gia về quy chế đào tạo TNUT. Viết lại câu hỏi để tìm kiếm trong tài liệu quy chế.
+        const prompt = `Bạn là trợ lý AI thông minh. Nhiệm vụ của bạn là viết lại câu hỏi của người dùng để tìm kiếm trong tài liệu quy chế đào tạo đại học.
 
-Lịch sử hội thoại:
+Lịch sử hội thoại (Context):
 """
-${history || "Không có"}
+${history || "Không có lịch sử"}
 """
 
-Câu hỏi: "${rawQuestion}"
+Câu hỏi hiện tại của người dùng: "${rawQuestion}"
 
-THUẬT NGỮ TNUT (quan trọng):
-- "điểm tích", "X điểm tích" (X >= 50) → "xếp loại rèn luyện", "điểm rèn luyện"
-- Điểm 50-100 = điểm rèn luyện (thang 100)
-- Điểm 1-10 = điểm thi môn học (thang 10)
-- "rớt môn", "trượt môn", "fail" → "học lại", "không đạt môn học"
-- "GPA", "điểm TB", "điểm trung bình" → "điểm trung bình tích lũy"
-- "học phí", "tiền học" → "mức học phí"
-- "thi lại", "kiểm tra lại" → "thi cải thiện điểm"
-
-YÊU CẦU:
-1. Nếu câu hỏi thiếu ngữ cảnh, DÙNG LỊCH SỬ để bổ sung
-2. Phân biệt rõ: số 1-10 là điểm thi, số 50-100 là điểm rèn luyện
-3. Chuyển thuật ngữ sinh viên → thuật ngữ quy chế
-4. CHỈ TRẢ VỀ CÂU VIẾT LẠI, KHÔNG GIẢI THÍCH
+Yêu cầu:
+1. Nếu câu hỏi thiếu chủ ngữ hoặc phụ thuộc vào lịch sử (ví dụ: "còn 6 điểm thì sao?", "thang điểm 4"), hãy DÙNG LỊCH SỬ để điền đầy đủ thông tin.
+2. Sửa lỗi chính tả, từ lóng (ví dụ: "tích gì" -> "xếp loại gì", "rớt môn" -> "học lại").
+3. Viết lại thành một câu truy vấn đầy đủ, rõ ràng, đúng thuật ngữ hành chính.
+4. CHỈ TRẢ VỀ CÂU ĐÃ VIẾT LẠI, KHÔNG GIẢI THÍCH GÌ THÊM.
 
 Câu hỏi viết lại:`;
 
         const result = await rewriteModel.invoke(prompt);
         const rewritten = result.content ? result.content.trim() : result.toString().trim();
 
+        logger.info('Question rewritten', {
+            original: rawQuestion,
+            rewritten
+        });
+
         return rewritten;
     } catch (error) {
+        logger.warn('Question rewrite failed, using original', { error: error.message });
         return rawQuestion;
     }
 }
@@ -86,58 +137,19 @@ async function expandQuery(originalQuery, apiKey) {
         const expansionModel = new ChatAnthropic({
             modelName: "claude-3-haiku-20240307",
             apiKey: apiKey,
-            temperature: 0.2,
-            maxTokens: 250
+            temperature: 0,
+            maxTokens: 150
         });
 
-        const prompt = `Bạn là chuyên gia về hệ thống quy chế đào tạo đại học TNUT. Nhiệm vụ: tạo 2 biến thể câu hỏi để TÌM KIẾM HIỆU QUẢ trong cơ sở dữ liệu vector.
+        const prompt = `Tạo 2 biến thể của câu hỏi để tìm kiếm tốt hơn trong tài liệu quy chế.
 
-CÂU HỎI GỐC: "${originalQuery}"
+Câu hỏi gốc: "${originalQuery}"
 
-PHƯƠNG PHÁP TẠO BIẾN THỂ:
+QUY TẮC:
+1. Biến thể 1: Thêm từ khóa hành động (ví dụ: "học phí quốc phòng" → "đóng học phí quốc phòng")
+2. Biến thể 2: Dùng từ đồng nghĩa (ví dụ: "quốc phòng" → "an ninh")
 
-1. **Biến thể mở rộng ngữ cảnh** - Thêm từ khóa quan trọng:
-   - "xếp loại rèn luyện" → "điều kiện xếp loại rèn luyện sinh viên TNUT"
-   - "học phí" → "mức học phí đào tạo đại học chính quy"
-   - "thi lại" → "quy định thi cải thiện điểm môn học"
-   - Thêm: điều kiện, quy định, mức, thủ tục, tiêu chuẩn (nếu phù hợp)
-
-2. **Biến thể đồng nghĩa/liên quan** - Dùng thuật ngữ khác:
-   - "điểm rèn luyện" → "đánh giá kết quả rèn luyện sinh viên"
-   - "tốt nghiệp" → "điều kiện công nhận tốt nghiệp đại học"
-   - "học bổng" → "xét cấp học bổng khuyến khích học tập"
-   - Dùng: đánh giá, xét, cấp, công nhận, thực hiện (nếu phù hợp)
-
-3. **Biến thể khác góc nhìn** - Hỏi từ khía cạnh khác:
-   - "được bao nhiêu điểm?" → "tiêu chuẩn đạt điểm tối thiểu là gì?"
-   - "khi nào?" → "thời gian quy định thực hiện"
-   - "có được không?" → "điều kiện đủ để thực hiện"
-
-THUẬT NGỮ TNUT CẦN LƯU Ý:
-- Điểm 1-10: điểm thi môn học (thang 10)
-- Điểm 50-100: điểm rèn luyện (thang 100)
-- "học lại" = không đạt môn học
-- "thi cải thiện" = thi lại để nâng điểm
-
-YÊU CẦU OUTPUT:
-- Tạo ĐÚNG 2 biến thể
-- Mỗi biến thể phải KHÁC GÓC NHÌN với câu gốc
-- CHỈ GHI 2 DÒNG, KHÔNG số thứ tự, KHÔNG giải thích
-- Mỗi dòng là 1 câu hỏi hoàn chỉnh
-
-VÍ DỤ:
-
-Input: "90 điểm rèn luyện được xếp loại gì?"
-Output:
-điều kiện xếp loại xuất sắc rèn luyện sinh viên TNUT là bao nhiêu điểm
-tiêu chuẩn đánh giá kết quả rèn luyện xếp hạng cao nhất
-
-Input: "học phí là bao nhiêu?"
-Output:
-mức học phí đào tạo đại học chính quy TNUT hiện nay
-quy định thu học phí theo năm học mới nhất
-
-Bây giờ hãy tạo 2 biến thể cho câu hỏi trên:`;
+CHỈ TRẢ VỀ 2 DÒNG, mỗi dòng 1 biến thể, KHÔNG số thứ tự, KHÔNG giải thích:`;
 
         const result = await expansionModel.invoke(prompt);
         const content = result.content ? result.content.trim() : result.toString().trim();
@@ -145,9 +157,14 @@ Bây giờ hãy tạo 2 biến thể cho câu hỏi trên:`;
 
         const queries = [originalQuery, ...variants.slice(0, 2)];
 
+        logger.info('Query expanded', {
+            original: originalQuery,
+            variants: queries
+        });
+
         return queries;
     } catch (error) {
-        console.error('Query expansion failed:', error.message);
+        logger.warn('Query expansion failed', { error: error.message });
         return [originalQuery];
     }
 }
@@ -178,7 +195,7 @@ async function hybridSearch(queries, embeddings, pinecone, indexName) {
                 }
             }
         } catch (error) {
-            console.error('Search failed:', error.message);
+            logger.warn('Search failed for query', { query, error: error.message });
         }
     }
 
@@ -270,6 +287,7 @@ async function ensureChatId(chatId, userId, question) {
 
         return result.rows[0].id;
     } catch (error) {
+        logger.error('Failed to create chat', error);
         throw error;
     }
 }
@@ -282,12 +300,16 @@ async function saveMessage(chatId, role, content, sources = null) {
             [chatId, role, content, sources ? JSON.stringify(sources) : null]
         );
     } catch (error) {
+        logger.error('Failed to save message', error);
         throw error;
     }
 }
 
 module.exports = async (req, res) => {
     const requestId = Math.random().toString(36).substring(7);
+    const startTime = Date.now();
+
+    logger.info('Request received', { requestId, method: req.method });
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
@@ -300,45 +322,13 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: "userId không hợp lệ" });
         }
 
-        const sanitizeResult = sanitizeQuestion(question);
-        const hasXSS = sanitizeResult.hasXSS;
-        question = sanitizeResult.sanitized;
-
+        question = sanitizeQuestion(question);
         if (!question) {
             return res.status(400).json({ error: "Câu hỏi không hợp lệ" });
         }
 
         if (question.length > MAX_QUESTION_LENGTH) {
             question = question.substring(0, MAX_QUESTION_LENGTH);
-        }
-
-        if (hasXSS) {
-            const xssWarningAnswer = `⚠️ **Cảnh báo bảo mật**
-
-Tôi phát hiện câu hỏi của bạn chứa các ký tự đặc biệt có thể gây rủi ro bảo mật (XSS - Cross-Site Scripting).
-
-**Điều này có nghĩa là:**
-- Câu hỏi chứa mã HTML/JavaScript nguy hiểm như \`<script>\`, \`onerror=\`, \`javascript:\`...
-- Những ký tự này có thể được sử dụng để tấn công hệ thống
-- Tôi đã tự động loại bỏ các ký tự nguy hiểm này
-
-**Khuyến nghị:**
-- Vui lòng đặt câu hỏi bằng ngôn ngữ tự nhiên bình thường
-- Không cần dùng các ký tự đặc biệt như <, >, {, }, \\
-- Nếu bạn có ý định tốt, hãy diễn đạt lại câu hỏi
-
-Nếu bạn cần hỗ trợ về quy chế đào tạo, học vụ của TNUT, tôi luôn sẵn sàng giúp bạn! 😊`;
-
-            chatId = await ensureChatId(chatId, userId, question);
-            await saveMessage(chatId, 'user', question);
-            await saveMessage(chatId, 'assistant', xssWarningAnswer, { warning: "XSS_DETECTED" });
-
-            return res.status(200).json({
-                answer: xssWarningAnswer,
-                chatId,
-                warning: true,
-                cached: false
-            });
         }
 
         let chatHistory = "";
@@ -367,10 +357,11 @@ Nếu bạn cần hỗ trợ về quy chế đào tạo, học vụ của TNUT, 
                 cachedAnswer = await findInSemanticCache(refinedQuestion, queryVector);
             }
         } catch (cacheError) {
-            console.error('Cache check failed:', cacheError.message);
+            logger.error('Cache check failed', cacheError);
         }
 
         if (cachedAnswer) {
+            logger.info('Cache HIT', { requestId });
             chatId = await ensureChatId(chatId, userId, question);
             await saveMessage(chatId, 'user', question);
             await saveMessage(chatId, 'assistant', cachedAnswer, { source: "cache" });
@@ -382,10 +373,18 @@ Nếu bạn cần hỗ trợ về quy chế đào tạo, học vụ của TNUT, 
             });
         }
 
+        logger.info('Cache MISS', { requestId });
+
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 
         const results = await hybridSearch(queries, embeddings, pinecone, PINECONE_INDEX_NAME);
         const relevantDocs = results.filter(r => r[1] > SIMILARITY_THRESHOLD);
+
+        logger.info('Search results', {
+            requestId,
+            totalResults: results.length,
+            relevantResults: relevantDocs.length
+        });
 
         let context = "";
         let sources = [];
@@ -418,22 +417,17 @@ QUY TẮC TRẢ LỜI:
    - Nói như chuyên gia nắm rõ, KHÔNG đề cập đến nguồn thông tin
    - In đậm số liệu quan trọng (số tiền, điểm số, hạn chót)
 
-2. PHÂN BIỆT ĐIỂM SỐ (RẤT QUAN TRỌNG):
-   - Điểm 1-10: Điểm thi môn học (thang 10) - VD: "đạt 5.0", "điểm A"
-   - Điểm 50-100: Điểm rèn luyện (thang 100) - VD: "đạt 90 điểm rèn luyện", "xếp loại Xuất sắc"
-   - KHÔNG nhầm lẫn giữa 2 loại điểm này
-
-3. ĐỘ DÀI:
+2. ĐỘ DÀI:
    - Trả lời NGẮN GỌN, đi thẳng vào vấn đề
    - Danh sách: Liệt kê ĐẦY ĐỦ TẤT CẢ items từ context (VD: nếu có 8 khoa thì liệt kê cả 8)
    - Lưu ý: CHỈ 1 câu ngắn hoặc bỏ qua nếu không cần thiết
 
-4. LIÊN HỆ:
+3. LIÊN HỆ:
    - Ưu tiên thông tin chi tiết từ context: tên người, chức vụ, SĐT, email
    - VD: "Liên hệ: ThS. Nguyễn Văn A - Trưởng phòng Đào tạo - 0280.3858568 - daotao@tnut.edu.vn"
    - Chỉ nói chung "Liên hệ Phòng Đào tạo" nếu context KHÔNG có thông tin cụ thể
 
-5. CẤU TRÚC:
+4. CẤU TRÚC:
    - Câu mở đầu: Trả lời trực tiếp
    - Nội dung: Thông tin chi tiết (danh sách đầy đủ nếu có)
    - Kết thúc: Thông tin liên hệ CỤ THỂ (nếu có trong context)
@@ -467,8 +461,11 @@ Trả lời:`;
                 await saveToSemanticCache(refinedQuestion, answer, queryVector);
             }
         } catch (cacheError) {
-            console.error('Failed to save to cache:', cacheError.message);
+            logger.error('Failed to save to cache', cacheError);
         }
+
+        const duration = Date.now() - startTime;
+        logger.info('Request completed', { requestId, duration: `${duration}ms` });
 
         res.status(200).json({
             answer,
@@ -478,7 +475,13 @@ Trả lời:`;
         });
 
     } catch (error) {
-        console.error('Request failed:', error.message);
+        const duration = Date.now() - startTime;
+
+        logger.error('Request failed', {
+            message: error.message,
+            requestId,
+            duration: `${duration}ms`
+        });
 
         res.status(500).json({
             error: "Lỗi hệ thống. Vui lòng thử lại sau.",
