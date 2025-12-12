@@ -14,60 +14,6 @@ const MAX_QUESTION_LENGTH = 500;
 const SIMILARITY_THRESHOLD = 0.55;
 const CHAT_HISTORY_LIMIT = 3;
 
-const logger = {
-    info: (message, meta = {}) => {
-        console.log(JSON.stringify({
-            level: 'info',
-            message,
-            timestamp: new Date().toISOString(),
-            ...sanitizeMeta(meta)
-        }));
-    },
-    warn: (message, meta = {}) => {
-        console.warn(JSON.stringify({
-            level: 'warn',
-            message,
-            timestamp: new Date().toISOString(),
-            ...sanitizeMeta(meta)
-        }));
-    },
-    error: (message, error = null) => {
-        const errorInfo = error ? {
-            message: error.message,
-            name: error.name,
-            code: error.code,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        } : undefined;
-
-        console.error(JSON.stringify({
-            level: 'error',
-            message,
-            timestamp: new Date().toISOString(),
-            error: errorInfo
-        }));
-    }
-};
-
-function sanitizeMeta(meta) {
-    const sanitized = {};
-    for (const [key, value] of Object.entries(meta)) {
-        if (typeof value === 'string') {
-            if (value.includes('<!DOCTYPE') || value.includes('<html')) {
-                sanitized[key] = '[HTML Content - ' + value.length + ' chars]';
-            }
-            else if (value.length > 500) {
-                sanitized[key] = value.substring(0, 500) + '... [truncated]';
-            }
-            else {
-                sanitized[key] = value;
-            }
-        } else {
-            sanitized[key] = value;
-        }
-    }
-    return sanitized;
-}
-
 async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
     if (!chatId) return "";
 
@@ -86,7 +32,7 @@ async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
             return `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`;
         }).join('\n');
     } catch (error) {
-        logger.error('Failed to load chat history', error);
+        console.error('Failed to load chat history:', error.message);
         return "";
     }
 }
@@ -129,14 +75,8 @@ Câu hỏi viết lại:`;
         const result = await rewriteModel.invoke(prompt);
         const rewritten = result.content ? result.content.trim() : result.toString().trim();
 
-        logger.info('Question rewritten', {
-            original: rawQuestion,
-            rewritten
-        });
-
         return rewritten;
     } catch (error) {
-        logger.warn('Question rewrite failed, using original', { error: error.message });
         return rawQuestion;
     }
 }
@@ -166,14 +106,8 @@ CHỈ TRẢ VỀ 2 DÒNG, KHÔNG SỐ THỨ TỰ, KHÔNG GIẢI THÍCH:`;
 
         const queries = [originalQuery, ...variants.slice(0, 2)];
 
-        logger.info('Query expanded', {
-            original: originalQuery,
-            variants: queries
-        });
-
         return queries;
     } catch (error) {
-        logger.warn('Query expansion failed', { error: error.message });
         return [originalQuery];
     }
 }
@@ -204,7 +138,7 @@ async function hybridSearch(queries, embeddings, pinecone, indexName) {
                 }
             }
         } catch (error) {
-            logger.warn('Search failed for query', { query, error: error.message });
+            console.error('Search failed:', error.message);
         }
     }
 
@@ -296,7 +230,6 @@ async function ensureChatId(chatId, userId, question) {
 
         return result.rows[0].id;
     } catch (error) {
-        logger.error('Failed to create chat', error);
         throw error;
     }
 }
@@ -309,16 +242,12 @@ async function saveMessage(chatId, role, content, sources = null) {
             [chatId, role, content, sources ? JSON.stringify(sources) : null]
         );
     } catch (error) {
-        logger.error('Failed to save message', error);
         throw error;
     }
 }
 
 module.exports = async (req, res) => {
     const requestId = Math.random().toString(36).substring(7);
-    const startTime = Date.now();
-
-    logger.info('Request received', { requestId, method: req.method });
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
@@ -331,7 +260,19 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: "userId không hợp lệ" });
         }
 
-        question = sanitizeQuestion(question);
+        try {
+            question = sanitizeQuestion(question);
+        } catch (error) {
+            if (error.message === 'XSS_DETECTED') {
+                return res.status(400).json({
+                    error: "⚠️ Phát hiện nội dung không an toàn",
+                    message: "Câu hỏi của bạn chứa các ký tự đặc biệt có thể gây rủi ro bảo mật. Vui lòng nhập câu hỏi bình thường.",
+                    type: "XSS_WARNING"
+                });
+            }
+            throw error;
+        }
+
         if (!question) {
             return res.status(400).json({ error: "Câu hỏi không hợp lệ" });
         }
@@ -366,11 +307,10 @@ module.exports = async (req, res) => {
                 cachedAnswer = await findInSemanticCache(refinedQuestion, queryVector);
             }
         } catch (cacheError) {
-            logger.error('Cache check failed', cacheError);
+            console.error('Cache check failed:', cacheError.message);
         }
 
         if (cachedAnswer) {
-            logger.info('Cache HIT', { requestId });
             chatId = await ensureChatId(chatId, userId, question);
             await saveMessage(chatId, 'user', question);
             await saveMessage(chatId, 'assistant', cachedAnswer, { source: "cache" });
@@ -382,18 +322,10 @@ module.exports = async (req, res) => {
             });
         }
 
-        logger.info('Cache MISS', { requestId });
-
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 
         const results = await hybridSearch(queries, embeddings, pinecone, PINECONE_INDEX_NAME);
         const relevantDocs = results.filter(r => r[1] > SIMILARITY_THRESHOLD);
-
-        logger.info('Search results', {
-            requestId,
-            totalResults: results.length,
-            relevantResults: relevantDocs.length
-        });
 
         let context = "";
         let sources = [];
@@ -475,11 +407,8 @@ Trả lời:`;
                 await saveToSemanticCache(refinedQuestion, answer, queryVector);
             }
         } catch (cacheError) {
-            logger.error('Failed to save to cache', cacheError);
+            console.error('Failed to save to cache:', cacheError.message);
         }
-
-        const duration = Date.now() - startTime;
-        logger.info('Request completed', { requestId, duration: `${duration}ms` });
 
         res.status(200).json({
             answer,
@@ -489,13 +418,7 @@ Trả lời:`;
         });
 
     } catch (error) {
-        const duration = Date.now() - startTime;
-
-        logger.error('Request failed', {
-            message: error.message,
-            requestId,
-            duration: `${duration}ms`
-        });
+        console.error('Request failed:', error.message);
 
         res.status(500).json({
             error: "Lỗi hệ thống. Vui lòng thử lại sau.",

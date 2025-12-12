@@ -1,15 +1,49 @@
+function detectXSS(input) {
+  if (!input || typeof input !== 'string') return false;
+
+  const xssPatterns = [
+    /<script[\s\S]*?>/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /<iframe/i,
+    /<embed/i,
+    /<object/i,
+    /onerror\s*=/i,
+    /onload\s*=/i,
+    /<img[^>]+src[^>]*>/i,
+    /eval\s*\(/i,
+    /expression\s*\(/i,
+    /<svg[\s\S]*?onload/i,
+    /data:text\/html/i,
+    /vbscript:/i
+  ];
+
+  return xssPatterns.some(pattern => pattern.test(input));
+}
+
 function sanitizeQuestion(question) {
   if (!question || typeof question !== 'string') return "";
 
+  if (detectXSS(question)) {
+    throw new Error('XSS_DETECTED');
+  }
+
   let cleaned = question.trim().replace(/\s+/g, ' ');
 
-  // Loại bỏ HTML tags hoàn toàn
-  cleaned = cleaned.replace(/<[^>]*>/g, '');
+  cleaned = cleaned
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<\/?[^>]+(>|$)/g, '');
 
-  // Loại bỏ ký tự đặc biệt nguy hiểm
+  cleaned = cleaned
+    .replace(/javascript:/gi, '')
+    .replace(/data:text\/html/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .replace(/vbscript:/gi, '');
+
   cleaned = cleaned.replace(/[{}[\]\\]/g, '');
 
-  // Escape các ký tự HTML entities còn sót
   cleaned = cleaned
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -61,5 +95,6 @@ function extractKeywords(question) {
 module.exports = {
   sanitizeQuestion,
   normalizeForMatching,
-  extractKeywords
+  extractKeywords,
+  detectXSS
 };
