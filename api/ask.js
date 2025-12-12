@@ -55,25 +55,41 @@ ${history || "Không có"}
 
 Câu hỏi: "${rawQuestion}"
 
-THUẬT NGỮ TNUT (quan trọng):
-- "điểm tích", "X điểm tích" (X >= 50) → "xếp loại rèn luyện", "điểm rèn luyện"
-- Điểm 50-100 = điểm rèn luyện (thang 100)
-- Điểm 1-10 = điểm thi môn học (thang 10) HOẶC điểm chữ A/B/C/D/F (thang 4)
-- "rớt môn", "trượt môn", "fail" → "học lại", "không đạt môn học"
-- "GPA", "điểm TB", "điểm trung bình" → "điểm trung bình tích lũy"
+QUY TẮC PHÂN LOẠI ĐIỂM (ƯU TIÊN CAO):
+
+1. **ĐIỂM THI MÔN HỌC (thang 10)** - MẶC ĐỊNH khi:
+   - Có từ: "thi", "kiểm tra", "bài thi", "thi được", "thi đạt"
+   - Điểm 0-10 VÀ không đề cập "rèn luyện"
+   - VD: "thi được 3 điểm", "đạt 7 điểm môn toán", "điểm thi 5.0"
+   → Viết lại: "điểm thi môn học đạt X (thang 10)"
+
+2. **ĐIỂM RÈN LUYỆN (thang 100)** - CHỈ KHI:
+   - Có từ CHÍNH XÁC: "rèn luyện", "đánh giá rèn luyện", "điểm tích"
+   - Điểm 50-100
+   - VD: "90 điểm rèn luyện", "điểm tích 80", "xếp loại rèn luyện"
+   → Viết lại: "điểm rèn luyện X (thang 100)"
+
+3. **GPA / ĐIỂM TRUNG BÌNH (thang 4)** - KHI:
+   - Có từ: "GPA", "điểm TB", "điểm trung bình", "điểm chữ A/B/C/D"
+   - Điểm 0-4.0
+   - VD: "GPA 3.5", "điểm A", "điểm trung bình 3.2"
+   → Viết lại: "điểm trung bình tích lũy GPA (thang 4)"
+
+THUẬT NGỮ CHUYỂN ĐỔI:
+- "rớt môn", "trượt", "fail", "thi lại" → "không đạt môn học", "học lại"
 - "học phí", "tiền học" → "mức học phí"
-- "thi lại", "kiểm tra lại" → "thi cải thiện điểm"
-- "điểm A", "điểm B", "điểm C", "điểm D", "điểm F" → "thang điểm chữ 4.0"
-- "3 điểm", "3.5 điểm" (nếu < 10) → "điểm thi môn học hoặc GPA"
+- "tốt nghiệp" → "điều kiện tốt nghiệp"
 
 YÊU CẦU:
-1. Nếu câu hỏi thiếu ngữ cảnh, DÙNG LỊCH SỬ để bổ sung
-2. Phân biệt rõ: 
-   - Số 1-10: điểm thi môn học (thang 10) HOẶC GPA (thang 4)
-   - Số 50-100: điểm rèn luyện (thang 100)
-   - Chữ A/B/C/D/F: thang điểm chữ 4.0
-3. Chuyển thuật ngữ sinh viên → thuật ngữ quy chế
+1. XÁC ĐỊNH ĐÚNG LOẠI ĐIỂM trước khi viết lại
+2. KHÔNG NÓI VỀ ĐIỂM RÈN LUYỆN trừ khi câu hỏi có từ "rèn luyện" hoặc "điểm tích"
+3. Nếu câu hỏi thiếu ngữ cảnh, DÙNG LỊCH SỬ để bổ sung
 4. CHỈ TRẢ VỀ CÂU VIẾT LẠI, KHÔNG GIẢI THÍCH
+
+VÍ DỤ:
+- "thi được 3 điểm thì tích gì" → "điểm thi môn học đạt 3 điểm thang 10 kết quả như thế nào"
+- "90 điểm rèn luyện được xếp loại gì" → "xếp loại điểm rèn luyện 90 điểm thang 100"
+- "GPA 3.5 có được học bổng không" → "điều kiện học bổng với điểm trung bình tích lũy 3.5"
 
 Câu hỏi viết lại:`;
 
@@ -99,56 +115,48 @@ async function expandQuery(originalQuery, apiKey) {
 
 CÂU HỎI GỐC: "${originalQuery}"
 
+PHÂN LOẠI ĐIỂM (QUAN TRỌNG):
+- Nếu câu hỏi về "thi", "kiểm tra", điểm 0-10 → ĐIỂM THI MÔN HỌC
+- Nếu câu hỏi có "rèn luyện", "điểm tích", điểm 50-100 → ĐIỂM RÈN LUYỆN
+- Nếu câu hỏi về "GPA", "điểm TB", "điểm A/B/C" → GPA/ĐIỂM CHỮ
+
 PHƯƠNG PHÁP TẠO BIẾN THỂ:
 
-1. **Biến thể mở rộng ngữ cảnh** - Thêm từ khóa quan trọng:
-   - "xếp loại rèn luyện" → "điều kiện xếp loại rèn luyện sinh viên TNUT"
-   - "học phí" → "mức học phí đào tạo đại học chính quy"
-   - "thi lại" → "quy định thi cải thiện điểm môn học"
-   - "điểm A/B/C/D" → "thang điểm chữ 4.0 quy đổi tín chỉ"
-   - Thêm: điều kiện, quy định, mức, thủ tục, tiêu chuẩn (nếu phù hợp)
+1. **Biến thể mở rộng ngữ cảnh** - Thêm từ khóa:
+   - "thi được 3 điểm" → "kết quả điểm thi môn học đạt 3 điểm thang 10"
+   - "90 điểm rèn luyện" → "xếp loại đánh giá rèn luyện 90 điểm thang 100"
+   - "GPA 3.5" → "điều kiện với điểm trung bình tích lũy 3.5 thang 4"
 
-2. **Biến thể đồng nghĩa/liên quan** - Dùng thuật ngữ khác:
-   - "điểm rèn luyện" → "đánh giá kết quả rèn luyện sinh viên"
-   - "tốt nghiệp" → "điều kiện công nhận tốt nghiệp đại học"
-   - "học bổng" → "xét cấp học bổng khuyến khích học tập"
-   - "GPA" → "điểm trung bình tích lũy hệ số 4"
-   - Dùng: đánh giá, xét, cấp, công nhận, thực hiện (nếu phù hợp)
+2. **Biến thể đồng nghĩa** - Dùng thuật ngữ khác:
+   - "thi rớt" → "không đạt môn học điểm thi dưới 4.0"
+   - "điểm kém" → "kết quả học tập yếu kém"
+   - "học lại" → "đăng ký học cải thiện môn không đạt"
 
-3. **Biến thể khác góc nhìn** - Hỏi từ khía cạnh khác:
-   - "được bao nhiêu điểm?" → "tiêu chuẩn đạt điểm tối thiểu là gì?"
-   - "khi nào?" → "thời gian quy định thực hiện"
-   - "có được không?" → "điều kiện đủ để thực hiện"
-
-THUẬT NGỮ TNUT CẦN LƯU Ý:
-- Điểm 0-10: có thể là điểm thi môn học (thang 10) HOẶC GPA (thang 4)
-- Điểm 50-100: điểm rèn luyện (thang 100)
-- Điểm A/B/C/D/F: thang điểm chữ (hệ 4.0)
-- "học lại" = không đạt môn học
-- "thi cải thiện" = thi lại để nâng điểm
+3. **Biến thể khác góc nhìn**:
+   - "3 điểm thi được gì?" → "hậu quả khi điểm thi môn học chỉ đạt 3.0"
+   - "90 điểm rèn luyện" → "tiêu chuẩn xếp loại với 90 điểm đánh giá rèn luyện"
 
 YÊU CẦU OUTPUT:
 - Tạo ĐÚNG 2 biến thể
-- Mỗi biến thể phải KHÁC GÓC NHÌN với câu gốc
+- GIỮ ĐÚNG loại điểm với câu gốc (thi → thi, rèn luyện → rèn luyện)
 - CHỈ GHI 2 DÒNG, KHÔNG số thứ tự, KHÔNG giải thích
-- Mỗi dòng là 1 câu hỏi hoàn chỉnh
 
 VÍ DỤ:
 
-Input: "90 điểm rèn luyện được xếp loại gì?"
+Input: "thi được 3 điểm thì tích gì"
 Output:
-điều kiện xếp loại xuất sắc rèn luyện sinh viên TNUT là bao nhiêu điểm
-tiêu chuẩn đánh giá kết quả rèn luyện xếp hạng cao nhất
+kết quả điểm thi môn học đạt 3 điểm thang 10 xếp loại như thế nào
+hậu quả khi điểm thi môn học chỉ được 3.0 điểm có phải học lại không
 
-Input: "3 điểm được tích gì?"
+Input: "90 điểm rèn luyện được xếp loại gì"
 Output:
-điểm trung bình tích lũy GPA 3.0 quy đổi thang điểm chữ như thế nào
-điểm thi môn học đạt 3.0 tương ứng xếp loại gì
+điều kiện xếp loại xuất sắc đánh giá rèn luyện sinh viên 90 điểm
+tiêu chuẩn đánh giá kết quả rèn luyện 90 điểm thang 100
 
-Input: "điểm A là bao nhiêu?"
+Input: "GPA 3.5 có được học bổng không"
 Output:
-thang điểm chữ A quy đổi sang điểm số hệ 4.0 là bao nhiêu
-tiêu chuẩn đạt điểm A trong hệ thống tín chỉ TNUT
+điều kiện xét học bổng với điểm trung bình tích lũy 3.5 thang 4
+tiêu chuẩn điểm GPA tối thiểu để nhận học bổng khuyến khích
 
 Bây giờ hãy tạo 2 biến thể cho câu hỏi trên:`;
 
@@ -429,18 +437,32 @@ QUY TẮC TRẢ LỜI:
    - Nói như chuyên gia nắm rõ, KHÔNG đề cập đến nguồn thông tin
    - In đậm số liệu quan trọng (số tiền, điểm số, hạn chót)
 
-2. PHÂN BIỆT ĐIỂM SỐ (RẤT QUAN TRỌNG):
-   - Điểm 0-4.0: GPA hoặc thang điểm chữ (A/B/C/D/F) - VD: "GPA 3.5", "điểm A = 4.0"
-   - Điểm 5.0-10: Điểm thi môn học (thang 10) - VD: "đạt 8.0", "điểm thi 7.5"
-   - Điểm 50-100: Điểm rèn luyện (thang 100) - VD: "đạt 90 điểm rèn luyện", "xếp loại Xuất sắc"
-   - KHÔNG nhầm lẫn giữa 3 loại điểm này
-   - Nếu context nói về GPA/điểm chữ thì TRẢ LỜI về GPA/điểm chữ
-   - Nếu context nói về điểm rèn luyện thì TRẢ LỜI về điểm rèn luyện
-   - CHỈ TRẢ LỜI những gì có trong context, KHÔNG suy đoán
+2. PHÂN BIỆT ĐIỂM SỐ (RẤT RẤT QUAN TRỌNG):
+   
+   **ĐIỂM THI MÔN HỌC (thang 10):**
+   - Khi câu hỏi có: "thi", "kiểm tra", "bài thi", điểm 0-10
+   - VD: "thi được 3 điểm" → TRẢ LỜI về kết quả thi môn học (rớt/đạt/...)
+   - KHÃ"NG nói về điểm rèn luyện
+   
+   **ĐIỂM RÈN LUYỆN (thang 100):**
+   - CHỈ KHI câu hỏi CÃ" TỪ: "rèn luyện", "đánh giá rèn luyện", "điểm tích"
+   - Điểm 50-100
+   - VD: "90 điểm rèn luyện" → TRẢ LỜI về xếp loại rèn luyện
+   
+   **GPA / ĐIỂM CHỮ (thang 4):**
+   - Khi câu hỏi có: "GPA", "điểm TB", "điểm A/B/C/D/F"
+   - Điểm 0-4.0
+   - VD: "GPA 3.5" → TRẢ LỜI về điểm trung bình tích lũy
+
+   **NGUYÃŠN TẮC VÃNG:**
+   - Nếu context nói về ĐIỂM THI → CHỈ trả lời về ĐIỂM THI
+   - Nếu context nói về ĐIỂM RÈN LUYỆN → CHỈ trả lời về ĐIỂM RÈN LUYỆN
+   - KHÃNG trộn lẫn các loại điểm
+   - KHÃNG suy đoán - CHỈ dựa vào context
 
 3. ĐỘ DÀI:
    - Trả lời NGẮN GỌN, đi thẳng vào vấn đề
-   - Danh sách: Liệt kê ĐẦY ĐỦ TẤT CẢ items từ context (VD: nếu có 8 khoa thì liệt kê cả 8)
+   - Danh sách: Liệt kê ĐẦY ĐỦ TẤT CẢ items từ context
    - Lưu ý: CHỈ 1 câu ngắn hoặc bỏ qua nếu không cần thiết
 
 4. LIÊN HỆ:
