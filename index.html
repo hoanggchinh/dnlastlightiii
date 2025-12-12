@@ -25,7 +25,6 @@
 
 
 <script type="module">
-    // 1. IMPORT THƯ VIỆN (Dùng bản ổn định từ CDN)
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js';
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js';
     import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/EffectComposer.js';
@@ -33,20 +32,16 @@
     import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/UnrealBloomPass.js';
     import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/ShaderPass.js';
 
-    // 2. KHAI BÁO BIẾN QUẢN LÝ
     let renderer, composer, scene, camera, controls, animationId;
     let isRunning = false;
     let diskMaterial, starMaterial, eventHorizonMat;
 
-    // Cấu hình thông số (Giữ nguyên bản gốc)
     const BLACK_HOLE_RADIUS = 1.3;
     const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
     const DISK_OUTER_RADIUS = 8.0;
     const DISK_TILT_ANGLE = Math.PI / 3.0;
 
-    // --- 3. SHADER GỐC (COPY NGUYÊN BẢN TỪ CODE BẠN GỬI) ---
 
-    // A. Lensing Shader (Bẻ cong ánh sáng)
     const lensingShader = {
         uniforms: {
             "tDiffuse": { value: null },
@@ -87,7 +82,6 @@
             }`
     };
 
-    // B. Disk Shader (Đĩa bồi tụ với Simplex Noise - Phần quan trọng nhất tạo nên vẻ đẹp)
     const diskVertexShader = `
         varying vec2 vUv;
         varying float vRadius;
@@ -187,29 +181,25 @@
         }
     `;
 
-    // --- 4. HÀM INIT (TÍCH HỢP) ---
     function initBlackHole() {
         if (isRunning) return;
 
-        // Xử lý Container và Background
         let container = document.getElementById('live-wallpaper-container');
         if (!container) {
             container = document.createElement('div');
             container.id = 'live-wallpaper-container';
-            // Z-index = 0 để nằm dưới icon, pointer-events: none để bấm xuyên qua
             container.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;";
             document.body.appendChild(container);
         }
 
-        // QUAN TRỌNG: Thiết lập màu nền gradient giống hệt code gốc để tone màu khớp
         container.style.background = 'radial-gradient(ellipse at center, #0a0a1a 0%, #000002 70%)';
         container.innerHTML = '';
         container.style.display = 'block';
 
         isRunning = true;
-        console.log("--> Kích hoạt Hố Đen (High Fidelity Version)");
+        console.log("High Fidelity Version");
 
-        // Setup Scene
+
         scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x020104, 0.025);
 
@@ -224,9 +214,7 @@
         renderer.toneMappingExposure = 1.2;
         container.appendChild(renderer.domElement);
 
-        // Setup Objects (Y hệt bản gốc)
 
-        // A. STARS (Sao)
         const starGeometry = new THREE.BufferGeometry();
         const starCount = 150000; // Số lượng sao lớn như bản gốc
         const starPositions = new Float32Array(starCount * 3);
@@ -275,7 +263,7 @@
         const stars = new THREE.Points(starGeometry, starMaterial);
         scene.add(stars);
 
-        // B. Event Horizon
+
         const eventHorizonGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS * 1.05, 128, 64);
         eventHorizonMat = new THREE.ShaderMaterial({
             uniforms: { uTime: { value: 0 }, uCameraPosition: { value: camera.position } },
@@ -288,7 +276,7 @@
         });
         scene.add(new THREE.Mesh(eventHorizonGeom, eventHorizonMat));
 
-        // C. Black Hole Core
+
         const blackHoleMesh = new THREE.Mesh(
             new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 128, 64),
             new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -296,7 +284,7 @@
         blackHoleMesh.renderOrder = 0;
         scene.add(blackHoleMesh);
 
-        // D. Accretion Disk (Đĩa bồi tụ xịn)
+
         const diskGeometry = new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 256, 128);
         diskMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -319,7 +307,7 @@
         accretionDisk.renderOrder = 1;
         scene.add(accretionDisk);
 
-        // Setup Post-processing
+
         composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
         composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.7, 0.8));
@@ -327,14 +315,14 @@
         const lensingPass = new ShaderPass(lensingShader);
         composer.addPass(lensingPass);
 
-        // Controls
+
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true; controls.dampingFactor = 0.035;
-        controls.rotateSpeed = 0.4; controls.autoRotate = true; // Auto rotate cho đẹp
+        controls.rotateSpeed = 0.4; controls.autoRotate = true;
         controls.autoRotateSpeed = 0.5;
         controls.enablePan = false; controls.enableZoom = false;
 
-        // Animation Loop
+
         const clock = new THREE.Clock();
         const blackHoleScreenPosVec3 = new THREE.Vector3();
 
@@ -344,7 +332,7 @@
             const elapsedTime = clock.getElapsedTime();
             const deltaTime = clock.getDelta();
 
-            // Update Uniforms
+
             if(diskMaterial) diskMaterial.uniforms.uTime.value = elapsedTime;
             if(starMaterial) starMaterial.uniforms.uTime.value = elapsedTime;
             if(eventHorizonMat) {
@@ -352,7 +340,7 @@
                 eventHorizonMat.uniforms.uCameraPosition.value.copy(camera.position);
             }
 
-            // Update Lensing Position
+
             blackHoleScreenPosVec3.copy(blackHoleMesh.position).project(camera);
             lensingPass.uniforms.blackHoleScreenPos.value.set(
                 (blackHoleScreenPosVec3.x + 1) / 2,
@@ -409,7 +397,7 @@
     window.initBlackHole = initBlackHole;
     window.stopBlackHole = stopBlackHole;
 
-    // Tự động chạy để test (nhớ xóa khi code đã ổn định)
+
     setTimeout(() => initBlackHole(), 1000);
 
 </script>
@@ -419,7 +407,7 @@
 
 <style>
     :root {
-        --bg-peal: rgba(255, 255, 255, 0.1); /* non-blurred fallback */
+        --bg-peal: rgba(255, 255, 255, 0.1);
         --dock-bg: rgba(20, 20, 20, 0.3);
         --menu-bg: rgba(20, 20, 20, 0.3);
         --window-bg: rgba(30, 30, 32, 0.85);
@@ -433,7 +421,7 @@
     body, html {
         margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
         font-family: var(--system-font); color: var(--text-color);
-        /* Default Wallpaper - Monterey style */
+
         background: linear-gradient(200deg, #a729f5, #5823d6, #092775, #1d6f9c);
         background-size: 400% 400%;
         animation: gradientBG 15s ease infinite;
@@ -446,7 +434,7 @@
         100% { background-position: 0% 50%; }
     }
 
-    /* --- Boot Screen --- */
+
     #boot-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: #000; z-index: 99999;
@@ -462,7 +450,7 @@
         transition: width 3s ease-in-out;
     }
 
-    /* --- UI Layout --- */
+
     #desktop { width: 100%; height: 100%; position: relative; }
 
     /* Menu Bar */
@@ -478,10 +466,10 @@
     .apple-icon { font-size: 16px; }
     #active-app-name { font-weight: 700; }
 
-    /* Dock */
+
 #dock-container {
     position: absolute;
-    bottom: 6px; /* giảm khoảng cách so với mép dưới */
+    bottom: 6px;
     width: 100%;
     display: flex;
     justify-content: center;
@@ -493,9 +481,9 @@
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
     border: 1px solid rgba(255,255,255,0.1);
-    height: 55px;           /* ↓ từ 70px xuống 55px */
-    padding: 4px 8px;       /* ↓ từ 5px 10px xuống 4px 8px */
-    border-radius: 16px;    /* bo góc nhẹ hơn */
+    height: 55px;
+    padding: 4px 8px;
+    border-radius: 16px;
     display: flex;
     align-items: flex-end;
     gap: 8px;
@@ -504,9 +492,9 @@
 }
 
 .dock-item {
-    width: 45px;            /* ↓ từ 55px */
-    height: 45px;           /* ↓ từ 55px */
-    border-radius: 10px;    /* tỉ lệ nhỏ hơn phù hợp */
+    width: 45px;
+    height: 45px;
+    border-radius: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -516,15 +504,15 @@
     cursor: pointer;
 }
 
-/* SVG Icon Styles */
+
 .dock-icon-svg {
     width: 100%;
     height: 100%;
-    border-radius: 10px; /* khớp với kích thước mới */
+    border-radius: 10px;
 }
 
 .dock-item:hover {
-    transform: scale(1.2) translateY(-8px); /* hover nhẹ hơn */
+    transform: scale(1.2) translateY(-8px);
     margin: 0 4px;
 }
 
@@ -534,7 +522,7 @@
     background: rgba(255,255,255,0.4);
     border-radius: 50%;
     position: absolute;
-    bottom: -6px; /* nâng dot lên cho cân đối */
+    bottom: -6px;
     display: none;
 }
 
@@ -549,7 +537,7 @@
     }
     .bouncing { animation: bounce 0.6s ease infinite; }
 
-    /* --- Windows System --- */
+    /* Windows System */
     .window {
         position: absolute; background: var(--window-bg);
         backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
@@ -596,13 +584,13 @@
     }
     .window-content {
         flex: 1; overflow: auto; position: relative;
-        user-select: text; /* Allow text selection inside apps */
+        user-select: text;
     }
 
-    /* jQuery UI Resizable Handle Fix */
+
     .ui-resizable-se { bottom: 0; right: 0; width: 15px; height: 15px; background: none; }
 
-    /* --- Context Menu --- */
+    /* Context Menu */
     #context-menu {
         position: absolute; background: rgba(40,40,40,0.9); backdrop-filter: blur(20px);
         border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 5px 0;
@@ -631,7 +619,7 @@
     .apple-menu-item i {
         color: inherit;
     }
-    /* --- APP SPECIFIC STYLES --- */
+
 
     /* Finder */
     .finder-layout { display: flex; height: 100%; background: #1e1e1e; color: #ddd; }
@@ -687,7 +675,6 @@
     .filter-btn.active { background: var(--accent); border-color: var(--accent); }
     .playback-row { display: flex; justify-content: center; align-items: center; gap: 15px; color: #ddd;}
 
-    /* Settings */
     .settings-app { padding: 20px; color: white; display: flex; flex-direction: column; gap: 20px; align-items: center;}
     .wall-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; }
     .wall-thumb { height: 80px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.2s;}
@@ -695,7 +682,6 @@
     .wall-thumb.selected { border-color: var(--accent); }
 
 
-        /* Đảm bảo khung chứa hình nền nằm dưới cùng và trải kín màn hình */
     #live-wallpaper-container {
         position: fixed;
         top: 0;
@@ -703,12 +689,11 @@
         width: 100%;
         height: 100%;
         z-index: 1 !important;
-        pointer-events: none; /* Để chuột bấm xuyên qua được vào desktop */
+        pointer-events: none;
     }
 
-    /* Quan trọng: Body phải trong suốt hoặc để container đè lên background cũ */
     body {
-        background-color: #000; /* Nền đen mặc định */
+        background-color: #000;
     }
 
 
@@ -717,8 +702,7 @@
 
 
 
-    /* SVGs for Icons (Data URIs for single file) */
-    /* Using generated geometric gradients to look like modern macOS icons */
+
     .icon-finder { background: linear-gradient(180deg, #e3e3e3 0%, #c7c7c7 100%); position: relative; overflow: hidden; }
     .icon-finder::after { content: ':)'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(90deg); font-size: 30px; font-weight: bold; color: #2a62b3; font-family: monospace;}
 
@@ -748,8 +732,6 @@
 
 
 
-
-    /* --- CSS CHO AUTH (Login/Register) --- */
     .auth-container {
         padding: 20px;
         color: #333;
@@ -850,7 +832,7 @@
             box-shadow: 0 8px 25px rgba(0,0,0,0.4);
         ">
 
-            <!-- Hiển thị khi chưa đăng nhập -->
+            <!-- be4 login -->
             <div id="menu-guest">
                 <div class="apple-menu-item" id="menu-login-btn">
                     <i class="fas fa-user-circle" style="width:18px;"></i>
@@ -858,7 +840,7 @@
                 </div>
             </div>
 
-            <!-- Hiển thị khi đã đăng nhập -->
+            <!-- after -->
             <div id="menu-logged" style="display:none;">
                 <div style="padding:8px 15px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px; color:#aaa;">
                     <div style="font-weight:600; color:#fff; font-size:13px;" id="menu-user-email">user@example.com</div>
@@ -900,7 +882,7 @@
     </div>
 
 <script>
-    // --- System Config & State ---
+
     const apps = [
         { id: 'finder', name: 'Finder', iconClass: 'icon-finder' },
         { id: 'safari', name: 'Safari', iconClass: 'icon-safari' },
@@ -913,7 +895,6 @@
         { id: 'trash', name: 'Bin', iconClass: 'icon-trash', separator: true }
     ];
 
-    // Simulated File System
     const fileSystem = {
         'Desktop': { type: 'folder', children: {
             'Welcome.txt': { type: 'text', content: 'Welcome to macOS Web Edition!\nThis is a simulation built in a single HTML file.'},
@@ -928,7 +909,7 @@
     };
     let currentPath = ['Desktop'];
 
-    // --- Window Manager Class ---
+
     class WindowManager {
         constructor() {
             this.windows = {};
@@ -980,14 +961,14 @@
         openApp(appId) {
             const appConfig = apps.find(a => a.id === appId);
 
-            // Bounce animation
+
             const dockItem = $(`#dock-${appId}`);
             if(!dockItem.hasClass('active') && !dockItem.hasClass('bouncing')) {
                 dockItem.addClass('bouncing');
                 setTimeout(() => dockItem.removeClass('bouncing').addClass('active'), 600);
             }
 
-            // Check if already open
+
             if (this.windows[appId]) {
                 if($(`#win-${appId}`).is(':hidden')) {
                     this.restoreWindow(appId);
@@ -1003,14 +984,13 @@
         createWindow(id, config) {
             this.windows[id] = config;
 
-            // Default dimensions based on app type
+
             let w = 600, h = 400;
             if(id === 'calculator') { w = 250; h = 350; }
             if(id === 'paint' || id === 'studio') { w = 700; h = 500; }
             if(id === 'settings') { w = 500; h = 300; }
-            // Đặt kích thước mặc định cho Chatbot
             if(id === 'chatbot') { w = 900; h = 600; }
-            // Random position placement
+
             const top = 50 + (Object.keys(this.windows).length * 20);
             const left = 50 + (Object.keys(this.windows).length * 20);
 
@@ -1031,21 +1011,21 @@
             $('#windows-container').append(winHTML);
             const $win = $(`#win-${id}`);
 
-            // Make interactive
+
             $win.draggable({ handle: '.window-header', containment: '#desktop', start: () => this.setActiveWindow(id) })
                 .resizable({ minHeight: 200, minWidth: 250, stop: ()=> { if(id==='paint') resizeCanvas(); }})
                 .on('mousedown', () => this.setActiveWindow(id));
 
-            // Window button events
+
             $win.find('.close-btn').on('click', (e) => { e.stopPropagation(); this.closeWindow(id); });
             $win.find('.min-btn').on('click', (e) => { e.stopPropagation(); this.minimizeWindow(id); });
             $win.find('.max-btn').on('click', (e) => { e.stopPropagation(); this.maximizeWindow(id); });
 
-            // Remove opening class after animation
+
             setTimeout(() => $win.removeClass('opening'), 200);
 
             this.setActiveWindow(id);
-            this.loadAppContent(id, $win); // Truyền $win vào để JS có thể tìm đúng phần tử
+            this.loadAppContent(id, $win);
         }
 
         closeWindow(id) {
@@ -1056,7 +1036,7 @@
         }
 
         minimizeWindow(id) {
-            // Simple fade out for simulate minimize to dock
+
             $(`#win-${id}`).fadeOut(200);
             this.updateMenubar('Finder');
         }
@@ -1077,7 +1057,7 @@
             if(id==='paint') setTimeout(resizeCanvas, 200);
         }
 
-        loadAppContent(id, $win) { // $win là cửa sổ jQuery (ví dụ: $('#win-terminal'))
+        loadAppContent(id, $win) {
             const container = $(`#content-${id}`);
             switch(id) {
                 case 'finder': renderFinder(container); break;
@@ -1095,7 +1075,7 @@
 
     const wm = new WindowManager();
 
-    // --- App Implementations ---
+
 
     // 1. FINDER
     function renderFinder(container) {
@@ -1156,16 +1136,15 @@
         });
     }
 
-    // 2. TERMINAL (CHATBOT ĐÃ GỘP)
+
 function renderTerminal(container, id, $win) {
     const uniqueId = $win.attr('id');
 
-    // --- 1. KHAI BÁO BIẾN TRẠNG THÁI ---
-    // Lấy ID người dùng từ LocalStorage (được lưu lúc đăng nhập ở app Tài Khoản)
-    let currentUserId = localStorage.getItem('userId');
-    let currentChatId = null; // null nghĩa là đang ở trạng thái tạo đoạn chat mới
 
-    // --- 2. CSS FULL (GIAO DIỆN MACOS DARK MODE) ---
+    let currentUserId = localStorage.getItem('userId');
+    let currentChatId = null;
+
+
     const chatStyles = `
         <style>
             .macos-chat-${uniqueId} {
@@ -1175,10 +1154,10 @@ function renderTerminal(container, id, $win) {
                 color: #e5e5e5;
                 font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
                 user-select: text;
-                overflow: hidden; /* Tránh vỡ layout */
+                overflow: hidden;
             }
 
-            /* --- SIDEBAR --- */
+            /*  SIDEBAR */
             .macos-chat-${uniqueId} .chat-sidebar {
                 width: 240px;
                 background: #000000;
@@ -1266,7 +1245,7 @@ function renderTerminal(container, id, $win) {
                 text-align: center; font-size: 12px; color: #666; padding: 20px 0;
             }
 
-            /* --- MAIN CHAT AREA --- */
+            /* main chat */
             .macos-chat-${uniqueId} .chat-main {
                 flex: 1;
                 display: flex;
@@ -1312,7 +1291,7 @@ function renderTerminal(container, id, $win) {
             .macos-chat-${uniqueId} .bot-info p { margin: 2px 0 0 0; font-size: 12px; color: #34c759; display: flex; align-items: center; gap: 4px; }
             .macos-chat-${uniqueId} .bot-info p::before { content: ''; width: 6px; height: 6px; background: #34c759; border-radius: 50%; display: inline-block; }
 
-            /* --- MESSAGES CONTAINER --- */
+
             .macos-chat-${uniqueId} .messages-container {
                 flex: 1;
                 overflow-y: auto;
@@ -1397,7 +1376,7 @@ function renderTerminal(container, id, $win) {
             .macos-chat-${uniqueId} .typing-dot:nth-child(2) { animation-delay: -0.16s; }
             @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-            /* --- INPUT AREA --- */
+
             .macos-chat-${uniqueId} .input-container {
                 background: #171717;
                 border-top: 1px solid #262626;
@@ -1453,7 +1432,7 @@ function renderTerminal(container, id, $win) {
                 text-align: center; font-size: 11px; color: #444; margin-top: 10px;
             }
 
-            /* --- MARKDOWN STYLES (Cho Bot) --- */
+
             .macos-chat-${uniqueId} .message-bubble.bot p { margin: 0 0 8px 0; }
             .macos-chat-${uniqueId} .message-bubble.bot p:last-child { margin: 0; }
             .macos-chat-${uniqueId} .message-bubble.bot strong { color: #fff; font-weight: 600; }
@@ -1465,7 +1444,7 @@ function renderTerminal(container, id, $win) {
         </style>
     `;
 
-    // --- 3. HTML STRUCTURE ---
+
     const chatHTML = `
         <div class="macos-chat-${uniqueId}">
             <div class="chat-sidebar">
@@ -1485,7 +1464,7 @@ function renderTerminal(container, id, $win) {
                     <div class="header-left">
                         <div class="bot-avatar-header">AI</div>
                         <div class="bot-info">
-                            <h3>Trợ lý Sinh viên</h3>
+                            <h3>Trợ lý Sinh viên TNUT</h3>
                             <p>Sẵn sàng hỗ trợ</p>
                         </div>
                     </div>
@@ -1497,9 +1476,9 @@ function renderTerminal(container, id, $win) {
                         <div class="message-avatar bot">AI</div>
                         <div class="message-content">
                             <div class="message-bubble bot">
-                                Xin chào! Tôi có thể giúp gì cho bạn về quy chế, học bổng hay lịch học không?
+                                Xin chào! Tôi có thể giúp gì cho bạn về quy chế học tập không?
                             </div>
-                            <div class="message-time">Bây giờ</div>
+                            <div class="message-time">now</div>
                         </div>
                     </div>
                 </div>
@@ -1516,33 +1495,31 @@ function renderTerminal(container, id, $win) {
                             <i class="fas fa-arrow-up"></i>
                         </button>
                     </div>
-                    <div class="hint-text">Enter để gửi • Shift + Enter xuống dòng</div>
+                    <div class="hint-text">Chatbot có thể mắc sai lầm</div>
                 </div>
             </div>
         </div>
     `;
 
-    // Render vào DOM
     container.html(chatStyles + chatHTML);
 
-    // --- 4. LOGIC JAVASCRIPT ---
 
-    // Elements
+
     const messagesContainer = $win.find(`#messages-${uniqueId}`);
     const chatInput = $win.find(`#chat-input-${uniqueId}`);
     const sendBtn = $win.find(`#send-btn-${uniqueId}`);
     const historyList = $win.find(`#history-list-${uniqueId}`);
     const newChatBtn = $win.find(`#btn-new-chat-${uniqueId}`);
 
-    // Helper: Cuộn xuống cuối
+
     const scrollToBottom = () => {
         messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
     };
 
-    // Helper: Format thời gian
+
     const getCurrentTime = () => new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
 
-    // Helper: Hiển thị Typing Indicator
+
     const showTyping = () => {
         const html = `
             <div class="message-wrapper typing-wrapper">
@@ -1560,22 +1537,22 @@ function renderTerminal(container, id, $win) {
     //
     const removeTyping = () => messagesContainer.find('.typing-wrapper').remove();
 
-    // Helper: Hiển thị tin nhắn
+
     const appendMessage = (text, sender) => {
         const time = getCurrentTime();
         const avatarText = sender === 'user' ? 'U' : 'AI';
         const avatarClass = sender === 'user' ? 'user' : 'bot';
         const bubbleClass = sender === 'user' ? 'user' : 'bot';
 
-        // Parse Markdown nếu là bot (dùng thư viện marked)
+
         let content = text;
         if (sender === 'bot' && typeof marked !== 'undefined') {
             content = marked.parse(text);
         } else if (sender === 'bot') {
-            // Fallback nếu quên import marked
+
             content = text.replace(/\n/g, '<br>');
         } else {
-            // User input thì escape HTML để tránh XSS
+
             content = $('<div>').text(text).html().replace(/\n/g, '<br>');
         }
 
@@ -1592,15 +1569,15 @@ function renderTerminal(container, id, $win) {
         scrollToBottom();
     };
 
-    // --- LOGIC 1: TẢI LỊCH SỬ CHAT (SIDEBAR) ---
+
     const loadHistory = async () => {
         if (!currentUserId) {
-            historyList.html('<div class="loading-msg">⚠️ Vui lòng đăng nhập<br>ở ứng dụng Tài Khoản.</div>');
+            historyList.html('<div class="loading-msg">⚠️ Vui lòng đăng nhập<br>ở apple icon.</div>');
             return;
         }
 
         try {
-            // LƯU Ý: Đã dùng /api/...
+
             const res = await fetch(`/api/chats?userId=${currentUserId}`);
             const chats = await res.json();
 
@@ -1628,7 +1605,7 @@ function renderTerminal(container, id, $win) {
                 historyList.append(itemHtml);
             });
 
-            // Gắn sự kiện click
+
             historyList.find('.history-item').click(function() {
                 const chatId = $(this).data('id');
                 switchChat(chatId);
@@ -1640,12 +1617,12 @@ function renderTerminal(container, id, $win) {
         }
     };
 
-    // --- LOGIC 2: CHUYỂN ĐOẠN CHAT ---
+
     const switchChat = async (chatId) => {
-        if (currentChatId === chatId) return; // Đang xem rồi thì thôi
+        if (currentChatId === chatId) return;
         currentChatId = chatId;
 
-        // UI Updates
+
         historyList.find('.history-item').removeClass('active');
         historyList.find(`[data-id="${chatId}"]`).addClass('active');
         messagesContainer.empty();
@@ -1655,7 +1632,7 @@ function renderTerminal(container, id, $win) {
             const res = await fetch(`/api/messages?chatId=${chatId}`);
             const messages = await res.json();
 
-            messagesContainer.empty(); // Xóa loading
+            messagesContainer.empty();
 
             messages.forEach(msg => {
                 const sender = msg.role === 'assistant' ? 'bot' : 'user';
@@ -1668,19 +1645,19 @@ function renderTerminal(container, id, $win) {
         }
     };
 
-    // --- LOGIC 3: GỬI TIN NHẮN (ĐÃ FIX URL) ---
+
     const handleSend = async () => {
         const question = chatInput.val().trim();
         if (!question) return;
 
         if (!currentUserId) {
-    appendMessage("⚠️ Bạn cần đăng nhập trước. Vui lòng mở ứng dụng Account (biểu tượng văn bản) để đăng nhập.", 'bot');
+    appendMessage("⚠️ Bạn cần đăng nhập trước. Vui lòng click apple icon để đăng nhập.", 'bot');
     return;
 }
 
         // UI Optimistic Update
         appendMessage(question, 'user');
-        chatInput.val('').trigger('input'); // Clear input & resize
+        chatInput.val('').trigger('input');
         sendBtn.prop('disabled', true);
         showTyping();
 
@@ -1692,7 +1669,7 @@ function renderTerminal(container, id, $win) {
                 body: JSON.stringify({
                     question: question,
                     userId: currentUserId,
-                    chatId: currentChatId // Gửi kèm ID (nếu null server sẽ tạo mới)
+                    chatId: currentChatId
                 })
             });
 
@@ -1704,10 +1681,10 @@ function renderTerminal(container, id, $win) {
                 appendMessage(data.answer, 'bot');
             }
 
-            // Nếu đây là tin nhắn đầu tiên của đoạn chat mới -> Reload sidebar để hiện title mới
+
             if (currentChatId === null && data.chatId) {
                 currentChatId = data.chatId;
-                loadHistory(); // Reload sidebar
+                loadHistory();
             }
 
         } catch (error) {
@@ -1720,13 +1697,13 @@ function renderTerminal(container, id, $win) {
         }
     };
 
-    // --- LOGIC 4: TẠO CHAT MỚI ---
+
     newChatBtn.click(() => {
         currentChatId = null;
         historyList.find('.history-item').removeClass('active');
         messagesContainer.empty();
 
-        // Tin nhắn chào mừng mặc định
+
         const welcome = `
             <div class="message-wrapper">
                 <div class="message-avatar bot">AI</div>
@@ -1742,12 +1719,11 @@ function renderTerminal(container, id, $win) {
         chatInput.focus();
     });
 
-    // --- EVENT LISTENERS ---
 
-    // Gửi khi bấm nút
+
     sendBtn.click(handleSend);
 
-    // Gửi khi bấm Enter (Shift+Enter để xuống dòng)
+
     chatInput.on('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -1755,28 +1731,28 @@ function renderTerminal(container, id, $win) {
         }
     });
 
-    // Auto-resize input
+
     chatInput.on('input', function() {
         const val = $(this).val();
-        // Enable/Disable nút gửi
+
         sendBtn.prop('disabled', val.trim().length === 0);
 
-        // Resize height
+
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
 
-    // --- KHỞI CHẠY ---
-    loadHistory(); // Load sidebar ngay khi mở app
+
+    loadHistory();
     chatInput.focus();
 }
 
 
-    // 3. login / account management
+
     function renderTextEdit(container, id, $win) {
     const uniqueId = $win.attr('id');
 
-    // 1. CSS Styles (Giữ nguyên style đẹp của bạn)
+
     const styles = `
     <style>
         .auth-container-${uniqueId} {
@@ -1822,7 +1798,7 @@ function renderTerminal(container, id, $win) {
     </style>
     `;
 
-    // 2. HTML Structure
+
     const html = `
     <div class="auth-container-${uniqueId}">
 
@@ -1842,20 +1818,20 @@ function renderTerminal(container, id, $win) {
             </div>
         </div>
 
-        <!-- VIEW: REGISTER -->
+
         <div id="view-register" class="auth-card hidden">
             <div class="auth-title">Tạo Tài Khoản</div>
             <div class="error-msg" id="reg-error"></div>
             <div class="success-msg" id="reg-success"></div>
 
-            <!-- Bước 1: Nhập info -->
+
             <div id="reg-step-1">
                 <input type="email" id="reg-email" class="auth-input" placeholder="Email của bạn">
                 <input type="password" id="reg-pass" class="auth-input" placeholder="Tạo mật khẩu">
                 <button class="auth-btn" id="btn-send-otp-reg">Gửi mã OTP</button>
             </div>
 
-            <!-- Bước 2: Nhập OTP -->
+
             <div id="reg-step-2" class="hidden">
                 <p style="font-size:12px; color:#666; margin-bottom:10px;">
                     Đã gửi OTP đến <b id="reg-email-display"></b>
@@ -1868,7 +1844,7 @@ function renderTerminal(container, id, $win) {
             <button class="auth-btn secondary" id="back-to-login-1">Quay lại đăng nhập</button>
         </div>
 
-        <!-- VIEW: FORGOT PASSWORD -->
+
         <div id="view-forgot" class="auth-card hidden">
             <div class="auth-title">Quên Mật Khẩu</div>
             <div class="error-msg" id="forgot-error"></div>
@@ -1891,25 +1867,25 @@ function renderTerminal(container, id, $win) {
     </div>
     `;
 
-    // 3. RENDER
+
     container.html(styles + html);
 
-    // 4. LOGIC
+
     const viewLogin = container.find('#view-login');
     const viewReg = container.find('#view-register');
     const viewForgot = container.find('#view-forgot');
 
-    // -- Helper reset forms --
+
     function resetForms() {
         container.find('.error-msg, .success-msg').hide().text('');
         container.find('input').val('');
         container.find('.auth-btn').prop('disabled', false).text(function() { return $(this).attr('original-text') || $(this).text(); });
     }
-    // Lưu text gốc của nút để restore sau khi loading
+
     container.find('.auth-btn').each(function() { $(this).attr('original-text', $(this).text()); });
 
 
-    // -- CHUYỂN VIEW --
+
     container.find('#link-register').click(() => {
         resetForms();
         viewLogin.addClass('hidden');
@@ -1925,16 +1901,14 @@ function renderTerminal(container, id, $win) {
         viewReg.addClass('hidden');
         viewForgot.addClass('hidden');
         viewLogin.removeClass('hidden');
-        // Reset steps logic
+
         container.find('#reg-step-1').removeClass('hidden');
         container.find('#reg-step-2').addClass('hidden');
         container.find('#forgot-step-1').removeClass('hidden');
         container.find('#forgot-step-2').addClass('hidden');
     });
 
-    // ==========================================
-    // A. ĐĂNG NHẬP (LOGIN)
-    // ==========================================
+    // loin
     container.find('#btn-login').click(async function() {
         const btn = $(this);
         const email = container.find('#login-email').val().trim();
@@ -1947,7 +1921,7 @@ function renderTerminal(container, id, $win) {
         errorBox.hide();
 
         try {
-            // GỌI API LOGIN THẬT
+
             const res = await fetch('/api/login', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ email, password })
@@ -1960,18 +1934,18 @@ function renderTerminal(container, id, $win) {
 
                 btn.text('Thành công!').css('background', '#28cd41');
 
-                // THÊM: Đóng chatbot cũ nếu đang mở (để reset dữ liệu)
+
                 if (wm.windows['chatbot']) {
                     wm.closeWindow('chatbot');
                 }
 
-                // Đóng cửa sổ Login sau 1s
+
                 setTimeout(() => {
                     $win.remove();
                     delete wm.windows['login'];
                     $('#dock-login').removeClass('active');
                     updateAppleMenuState();
-                    // Auto open chatbot mới
+
                     wm.openApp('chatbot');
                 }, 800);
             } else {
@@ -1985,8 +1959,7 @@ function renderTerminal(container, id, $win) {
                     }
                 });
 
-    // B (REGISTER)
-    // B1. GỬI OTP ĐĂNG KÝ (ĐÃ FIX: DÙNG API THẬT)
+
     container.find('#btn-send-otp-reg, #btn-resend-reg').click(async function() {
         const btn = $(this);
         const email = container.find('#reg-email').val().trim();
@@ -2000,11 +1973,11 @@ function renderTerminal(container, id, $win) {
         errorBox.hide(); successBox.hide();
 
         try {
-            // GỌI API GỬI OTP
+
             const res = await fetch('/api/send-otp', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ email: email, type: 'register' }) // type: register
+                body: JSON.stringify({ email: email, type: 'register' })
             });
             const data = await res.json();
 
@@ -2023,7 +1996,7 @@ function renderTerminal(container, id, $win) {
         }
     });
 
-    // B2. XÁC THỰC VÀ TẠO TÀI KHOẢN
+
     container.find('#btn-verify-reg').click(async function() {
         const btn = $(this);
         const email = container.find('#reg-email').val().trim();
@@ -2047,7 +2020,7 @@ function renderTerminal(container, id, $win) {
     successBox.text('✅ Đăng ký thành công! Đang chuyển về đăng nhập...').show();
 
     setTimeout(() => {
-        container.find('#back-to-login-1').click(); // Quay về login
+        container.find('#back-to-login-1').click();
     }, 1500);
 } else {
                 errorBox.text(data.message || 'Mã OTP không đúng').show();
@@ -2059,11 +2032,9 @@ function renderTerminal(container, id, $win) {
         }
     });
 
-    // ==========================================
-    // C. QUÊN MẬT KHẨU (FORGOT PASSWORD)
-    // ==========================================
 
-    // C1. Gửi OTP quên mật khẩu
+
+
     container.find('#btn-send-otp-forgot').click(async function() {
         const btn = $(this);
         const email = container.find('#forgot-email').val().trim();
@@ -2075,8 +2046,7 @@ function renderTerminal(container, id, $win) {
         errorBox.hide();
 
         try {
-            // Gọi API gửi OTP với type = 'forgot' (Nếu server hỗ trợ)
-            // Hoặc dùng tạm type='register' nếu logic server chưa phân biệt
+
             const res = await fetch('/api/send-otp', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ email, type: 'forgot' })
@@ -2096,7 +2066,7 @@ function renderTerminal(container, id, $win) {
         }
     });
 
-    // C2. Đổi mật khẩu mới
+
     container.find('#btn-reset-pass').click(async function() {
         const btn = $(this);
         const email = container.find('#forgot-email').val().trim();
@@ -2109,8 +2079,7 @@ function renderTerminal(container, id, $win) {
         btn.text('Đang đổi...').prop('disabled', true);
 
         try {
-            // LƯU Ý: Bạn cần tạo thêm API /api/reset-password ở server.js
-            // Nếu chưa có, đoạn này sẽ lỗi 404
+
             const res = await fetch('/api/reset-password', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ email, otp, newPassword: newPass })
@@ -2137,7 +2106,6 @@ function renderTerminal(container, id, $win) {
 
 
 
-    // 4. SKETCH (Paint)
     let canvas, ctx, painting = false;
     function renderPaint(container) {
         container.html(`
@@ -2154,7 +2122,7 @@ function renderTerminal(container, id, $win) {
             </div>
         `);
 
-        setTimeout(initCanvas, 100); // Wait for DOM
+        setTimeout(initCanvas, 100);
     }
 
     function initCanvas() {
@@ -2212,7 +2180,7 @@ function renderTerminal(container, id, $win) {
         ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    // 5. CALCULATOR
+
     function renderCalculator(container) {
         container.html(`
             <div class="calc-app">
@@ -2263,7 +2231,7 @@ function renderTerminal(container, id, $win) {
         }
     };
 
-    // 6. SAFARI
+
     function renderSafari(container) {
         container.html(`
             <div class="safari-app">
@@ -2286,8 +2254,7 @@ function renderTerminal(container, id, $win) {
         });
     }
 
-    // 7. STUDIO (Video Editor sim)
-// 7. STUDIO (Image Slideshow - responsive & dock-safe)
+
 function renderStudio(container) {
     const slides = [
         'https://picsum.photos/1600/900?image=1050',
@@ -2320,7 +2287,7 @@ function renderStudio(container) {
         </div>
     `);
 
-    // Tạo thumbnail
+
     slides.forEach((src, i) => {
         $('#slide-thumbs').append(`
             <img src="${src}" class="thumb" data-i="${i}"
@@ -2331,17 +2298,17 @@ function renderStudio(container) {
         `);
     });
 
-    // Chọn slide
+
     $('#slide-thumbs').on('click', '.thumb', function(){
         current = $(this).data('i');
         updateSlide();
     });
 
-    // Điều khiển
+
     $('#next-slide').on('click', () => { current = (current + 1) % slides.length; updateSlide(); });
     $('#prev-slide').on('click', () => { current = (current - 1 + slides.length) % slides.length; updateSlide(); });
 
-    // Tự động trình chiếu
+
     let playing = false, timer = null;
     $('#play-slides').on('click', function() {
         playing = !playing;
@@ -2356,7 +2323,6 @@ function renderStudio(container) {
                    .eq(current).css({opacity:1, border:'2px solid var(--accent)'});
     }
 
-    // Đảm bảo ảnh scale theo kích thước cửa sổ (khi maximize hoặc resize)
     const win = container.closest('.window');
     const adjustSize = () => {
         const stage = win.find('.video-stage');
@@ -2371,8 +2337,6 @@ function renderStudio(container) {
 
 
 
-    // 8. SETTINGS
-    // 8. SETTINGS (Đã cập nhật)
     function renderSettings(container) {
         container.html(`
             <div class="settings-app">
@@ -2399,61 +2363,55 @@ function renderStudio(container) {
     }
 
 
-    // Logic đổi hình nền (Đã cập nhật)
+
 window.changeWall = function(el, type) {
-    // 1. Loại bỏ class selected khỏi tất cả
+
     $('.wall-thumb').removeClass('selected');
     $(el).addClass('selected');
 
-    // 2. Xử lý logic
-    // Lưu ý: Đảm bảo nút bấm của bạn truyền đúng tham số type là 'wall4' hoặc 'blackhole'
     if (type === 'wall4' || type === 'blackhole') {
 
-        // Trước tiên tắt đi để reset (nếu đang chạy)
+
         if (typeof window.stopBlackHole === 'function') {
             window.stopBlackHole();
         }
 
-        // Đặt nền đen
+
         $('body').css('background', '#000000');
 
-        // Gọi hàm khởi chạy (Tên đúng là initBlackHole)
+
         if (typeof window.initBlackHole === 'function') {
-            // Delay nhẹ 1 chút để DOM kịp cập nhật nếu cần
+
             setTimeout(() => {
                 window.initBlackHole();
             }, 50);
         } else {
-            console.warn("Chưa load được wall4.js hoặc chưa gắn vào window");
-            // Fallback nếu lỗi: hiện ảnh tĩnh
-            $('body').css('background', 'url(img/wall4_preview.jpg)');
+            console.warn("smt wr");
+
         }
 
     } else {
-        // Trường hợp chọn hình nền khác (wall1, wall2...)
 
-        // Dừng hiệu ứng 3D nếu nó đang chạy
+
         if (typeof window.stopBlackHole === 'function') {
             window.stopBlackHole();
         }
 
-        // Lấy ảnh từ nút bấm áp dụng vào body
-        // (Giả sử trong nút bấm bạn có style="background: url(...)")
         let bgStyle = $(el).css('background-image');
         if (bgStyle && bgStyle !== 'none') {
              $('body').css('background-image', bgStyle);
              $('body').css('background-size', 'cover');
              $('body').css('background-position', 'center');
         } else {
-             // Hoặc lấy màu
+
              $('body').css('background', $(el).css('background'));
         }
     }
 };
 
-    // --- Infrastructure ---
 
-    // Clock
+
+
     function updateClock() {
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -2463,20 +2421,19 @@ window.changeWall = function(el, type) {
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Battery (if supported)
     if ('getBattery' in navigator) {
         navigator.getBattery().then(battery => {
             $('#battery-level').text(Math.round(battery.level * 100) + '%');
         });
     }
 
-    /// Boot Sequence
+
     $(window).on('load', () => {
         $('.loading-progress').css('width', '100%');
         setTimeout(() => {
             $('#boot-screen').fadeOut(500, function(){ $(this).remove(); });
 
-            // Check login state - open Login if not logged in, else open Finder
+
             const userId = localStorage.getItem('userId');
             if (!userId) {
                 setTimeout(() => wm.openApp('login'), 600);
@@ -2486,10 +2443,9 @@ window.changeWall = function(el, type) {
         }, 3200);
     });
 
-    // --- Apple Menu Logic ---
     let appleMenuOpen = false;
 
-// Apple Menu Item Click Handlers
+
 $('#menu-login-btn').on('click', function(e) {
     e.stopPropagation();
     $('#apple-menu').hide();
@@ -2507,7 +2463,7 @@ $('#menu-settings-btn').on('click', function(e) {
     wm.openApp('settings');
 });
 
-// Toggle Apple Menu
+
 $('.apple-menu-trigger').on('click', function(e) {
     e.stopPropagation();
 
@@ -2521,7 +2477,7 @@ $('.apple-menu-trigger').on('click', function(e) {
         updateAppleMenuState();
     }
 });
-    // Close menu when click outside
+
     $(document).on('click', function(e) {
         if (!$(e.target).closest('#apple-menu, .apple-menu-trigger').length) {
             $('#apple-menu').hide();
@@ -2529,7 +2485,6 @@ $('.apple-menu-trigger').on('click', function(e) {
         }
     });
 
-    // Update menu based on login state
     function updateAppleMenuState() {
     const userId = localStorage.getItem('userId');
     const userEmail = localStorage.getItem('userEmail');
@@ -2544,13 +2499,13 @@ $('.apple-menu-trigger').on('click', function(e) {
     }
 }
 
-// Logout handler
+    // logout
     window.handleLogout = function() {
-    // Đăng xuất
+
     localStorage.removeItem('userId');
     localStorage.removeItem('userEmail');
 
-    // Đóng tất cả cửa sổ Chatbot và Login
+
     if (wm.windows['chatbot']) {
         wm.closeWindow('chatbot');
     }
@@ -2558,16 +2513,16 @@ $('.apple-menu-trigger').on('click', function(e) {
         wm.closeWindow('login');
     }
 
-    // Ẩn Apple Menu
+
     $('#apple-menu').hide();
 
-    // Cập nhật trạng thái menu
+
     updateAppleMenuState();
 
-    // Hiển thị toast
+
     showToast('✓ Đã đăng xuất');
 
-    // Tự động mở Login sau 1 giây
+
     setTimeout(() => {
         wm.openApp('login');
     }, 1000);
@@ -2575,7 +2530,7 @@ $('.apple-menu-trigger').on('click', function(e) {
 
 function showToast(message) {
     const toast = $('<div>')
-        .text(message) // ✅ Dùng .text() thay vì template literal
+        .text(message)
         .css({
             position: 'fixed',
             bottom: '80px',
@@ -2595,10 +2550,10 @@ function showToast(message) {
 
     $('body').append(toast);
 
-    // Fade in
+
     setTimeout(() => toast.css('opacity', 1), 10);
 
-    // Fade out after 2.5s
+
     setTimeout(() => {
         toast.css('opacity', 0);
         setTimeout(() => toast.remove(), 300);
@@ -2607,5 +2562,3 @@ function showToast(message) {
 </script>
 </body>
 </html>
-
-

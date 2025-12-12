@@ -14,9 +14,6 @@ const MAX_QUESTION_LENGTH = 500;
 const SIMILARITY_THRESHOLD = 0.55;
 const CHAT_HISTORY_LIMIT = 3;
 
-// ============================================================================
-// LOGGER - Hiển thị trên Vercel
-// ============================================================================
 const logger = {
     info: (message, meta = {}) => {
         console.log(JSON.stringify({
@@ -51,16 +48,13 @@ const logger = {
     }
 };
 
-// Helper: Loại bỏ HTML và dữ liệu quá dài khỏi logs
 function sanitizeMeta(meta) {
     const sanitized = {};
     for (const [key, value] of Object.entries(meta)) {
         if (typeof value === 'string') {
-            // Nếu là HTML, chỉ log 100 ký tự đầu
             if (value.includes('<!DOCTYPE') || value.includes('<html')) {
                 sanitized[key] = '[HTML Content - ' + value.length + ' chars]';
             }
-            // Nếu quá dài (>500 chars), cắt bớt
             else if (value.length > 500) {
                 sanitized[key] = value.substring(0, 500) + '... [truncated]';
             }
@@ -74,9 +68,6 @@ function sanitizeMeta(meta) {
     return sanitized;
 }
 
-// ============================================================================
-// Lấy lịch sử chat từ Database
-// ============================================================================
 async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
     if (!chatId) return "";
 
@@ -91,24 +82,16 @@ async function getChatHistory(chatId, limit = CHAT_HISTORY_LIMIT) {
 
         if (res.rows.length === 0) return "";
 
-        const history = res.rows.reverse().map(msg => {
+        return res.rows.reverse().map(msg => {
             return `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`;
         }).join('\n');
-
-        logger.info('Chat history loaded', { chatId, messageCount: res.rows.length });
-        return history;
     } catch (error) {
         logger.error('Failed to load chat history', error);
         return "";
     }
 }
 
-// ============================================================================
-// Viết lại câu hỏi dựa trên lịch sử
-// ============================================================================
 async function rewriteQuestion(rawQuestion, history, apiKey) {
-    const startTime = Date.now();
-
     try {
         const rewriteModel = new ChatAnthropic({
             modelName: "claude-3-haiku-20240307",
@@ -137,11 +120,9 @@ Câu hỏi viết lại:`;
         const result = await rewriteModel.invoke(prompt);
         const rewritten = result.content ? result.content.trim() : result.toString().trim();
 
-        const duration = Date.now() - startTime;
         logger.info('Question rewritten', {
             original: rawQuestion,
-            rewritten,
-            duration: `${duration}ms`
+            rewritten
         });
 
         return rewritten;
@@ -151,9 +132,78 @@ Câu hỏi viết lại:`;
     }
 }
 
-// ============================================================================
-// Rerank chunks dựa trên mức độ liên quan
-// ============================================================================
+async function expandQuery(originalQuery, apiKey) {
+    try {
+        const expansionModel = new ChatAnthropic({
+            modelName: "claude-3-haiku-20240307",
+            apiKey: apiKey,
+            temperature: 0,
+            maxTokens: 150
+        });
+
+        const prompt = `Tạo 2 biến thể của câu hỏi để tìm kiếm tốt hơn trong tài liệu quy chế.
+
+Câu hỏi gốc: "${originalQuery}"
+
+QUY TẮC:
+1. Biến thể 1: Thêm từ khóa hành động (ví dụ: "học phí quốc phòng" → "đóng học phí quốc phòng")
+2. Biến thể 2: Dùng từ đồng nghĩa (ví dụ: "quốc phòng" → "an ninh")
+
+CHỈ TRẢ VỀ 2 DÒNG, mỗi dòng 1 biến thể, KHÔNG số thứ tự, KHÔNG giải thích:`;
+
+        const result = await expansionModel.invoke(prompt);
+        const content = result.content ? result.content.trim() : result.toString().trim();
+        const variants = content.split('\n').filter(v => v.trim()).map(v => v.trim());
+
+        const queries = [originalQuery, ...variants.slice(0, 2)];
+
+        logger.info('Query expanded', {
+            original: originalQuery,
+            variants: queries
+        });
+
+        return queries;
+    } catch (error) {
+        logger.warn('Query expansion failed', { error: error.message });
+        return [originalQuery];
+    }
+}
+
+async function hybridSearch(queries, embeddings, pinecone, indexName) {
+    const index = pinecone.Index(indexName);
+    const allResults = new Map();
+
+    for (const query of queries) {
+        try {
+            const queryVector = await embeddings.embedQuery(query);
+            const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+                pineconeIndex: index
+            });
+
+            const results = await vectorStore.similaritySearchVectorWithScore(queryVector, 5);
+
+            for (const [doc, score] of results) {
+                const key = doc.pageContent.substring(0, 100).trim();
+
+                if (allResults.has(key)) {
+                    const existing = allResults.get(key);
+                    if (score > existing[1]) {
+                        allResults.set(key, [doc, score]);
+                    }
+                } else {
+                    allResults.set(key, [doc, score]);
+                }
+            }
+        } catch (error) {
+            logger.warn('Search failed for query', { query, error: error.message });
+        }
+    }
+
+    return Array.from(allResults.values())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+}
+
 function rerankChunks(results, question) {
     const questionLower = question.toLowerCase();
     const questionWords = questionLower
@@ -164,7 +214,6 @@ function rerankChunks(results, question) {
         let relevanceScore = score;
         const content = doc.pageContent.toLowerCase();
 
-        // Tăng điểm nếu chunk chứa nhiều từ khóa từ câu hỏi
         let keywordMatchCount = 0;
         questionWords.forEach(word => {
             if (content.includes(word)) {
@@ -173,17 +222,14 @@ function rerankChunks(results, question) {
         });
         relevanceScore += keywordMatchCount * 0.05;
 
-        // Tăng điểm nếu chunk có tiêu đề
         if (doc.metadata.title) {
             relevanceScore += 0.1;
         }
 
-        // Tăng điểm cho chunk dài (có nhiều thông tin)
         if (doc.pageContent.length > 500) {
             relevanceScore += 0.05;
         }
 
-        // Tăng điểm nếu có thông tin liên hệ (email, số điện thoại)
         if (/\d{10,11}|@/.test(content)) {
             relevanceScore += 0.08;
         }
@@ -198,23 +244,13 @@ function rerankChunks(results, question) {
 
     rankedResults.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
-    logger.info('Chunks reranked', {
-        totalChunks: rankedResults.length,
-        topScore: rankedResults[0]?.relevanceScore.toFixed(3),
-        avgKeywordMatch: (rankedResults.reduce((sum, r) => sum + r.keywordMatchCount, 0) / rankedResults.length).toFixed(1)
-    });
-
     return rankedResults;
 }
 
-// ============================================================================
-// Tạo context từ các chunks
-// ============================================================================
 function buildContext(rankedResults, topK = 5) {
     const topChunks = rankedResults.slice(0, topK);
     const uniqueChunks = [];
 
-    // Deduplication
     const seenContent = new Set();
     for (const chunk of topChunks) {
         const signature = chunk.doc.pageContent.substring(0, 100).trim();
@@ -223,12 +259,6 @@ function buildContext(rankedResults, topK = 5) {
             seenContent.add(signature);
         }
     }
-
-    logger.info('Context built', {
-        originalChunks: topChunks.length,
-        uniqueChunks: uniqueChunks.length,
-        totalCharacters: uniqueChunks.reduce((sum, c) => sum + c.doc.pageContent.length, 0)
-    });
 
     return uniqueChunks
         .map((chunk, index) => {
@@ -242,9 +272,6 @@ function buildContext(rankedResults, topK = 5) {
         .join('\n\n---\n\n');
 }
 
-// ============================================================================
-// Tạo hoặc lấy chatId
-// ============================================================================
 async function ensureChatId(chatId, userId, question) {
     if (chatId) return chatId;
 
@@ -258,18 +285,13 @@ async function ensureChatId(chatId, userId, question) {
             [userId, title]
         );
 
-        const newChatId = result.rows[0].id;
-        logger.info('New chat created', { chatId: newChatId, userId });
-        return newChatId;
+        return result.rows[0].id;
     } catch (error) {
         logger.error('Failed to create chat', error);
         throw error;
     }
 }
 
-// ============================================================================
-// Lưu tin nhắn vào database
-// ============================================================================
 async function saveMessage(chatId, role, content, sources = null) {
     try {
         await pool.query(
@@ -277,25 +299,17 @@ async function saveMessage(chatId, role, content, sources = null) {
              VALUES ($1, $2, $3, $4)`,
             [chatId, role, content, sources ? JSON.stringify(sources) : null]
         );
-        logger.info('Message saved', { chatId, role, contentLength: content.length });
     } catch (error) {
         logger.error('Failed to save message', error);
         throw error;
     }
 }
 
-// ============================================================================
-// MAIN HANDLER
-// ============================================================================
 module.exports = async (req, res) => {
     const requestId = Math.random().toString(36).substring(7);
     const startTime = Date.now();
 
-    logger.info('Request received', {
-        requestId,
-        method: req.method,
-        body: req.body
-    });
+    logger.info('Request received', { requestId, method: req.method });
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: "Method not allowed" });
@@ -304,9 +318,6 @@ module.exports = async (req, res) => {
     try {
         let { question, userId = 1, chatId } = req.body;
 
-        // ========================================
-        // VALIDATION
-        // ========================================
         if (!userId || userId < 1) {
             return res.status(400).json({ error: "userId không hợp lệ" });
         }
@@ -317,36 +328,22 @@ module.exports = async (req, res) => {
         }
 
         if (question.length > MAX_QUESTION_LENGTH) {
-            logger.warn('Question truncated', {
-                originalLength: question.length,
-                maxLength: MAX_QUESTION_LENGTH
-            });
             question = question.substring(0, MAX_QUESTION_LENGTH);
         }
 
-        logger.info('Question received', { requestId, question });
-
-        // ========================================
-        // LẤY LỊCH SỬ CHAT
-        // ========================================
         let chatHistory = "";
         if (chatId) {
             chatHistory = await getChatHistory(chatId);
         }
 
-        // ========================================
-        // VIẾT LẠI CÂU HỎI
-        // ========================================
         const refinedQuestion = await rewriteQuestion(
             question,
             chatHistory,
             process.env.ANTHROPIC_API_KEY
         );
 
-        // ========================================
-        // TẠO EMBEDDING
-        // ========================================
-        logger.info('Creating embedding', { requestId });
+        const queries = await expandQuery(refinedQuestion, process.env.ANTHROPIC_API_KEY);
+
         const embeddings = new GoogleGenerativeAIEmbeddings({
             model: "models/text-embedding-004",
             apiKey: process.env.GEMINI_API_KEY,
@@ -354,44 +351,20 @@ module.exports = async (req, res) => {
 
         const queryVector = await embeddings.embedQuery(refinedQuestion);
 
-        logger.info('Embedding created', {
-            requestId,
-            vectorLength: queryVector?.length,
-            vectorType: typeof queryVector
-        });
-
-        // ========================================
-        // KIỂM TRA CACHE (SAU KHI REWRITE)
-        // ========================================
         let cachedAnswer = null;
         try {
             if (queryVector && Array.isArray(queryVector) && queryVector.length > 0) {
                 cachedAnswer = await findInSemanticCache(refinedQuestion, queryVector);
-                logger.info('Cache checked', { requestId, found: !!cachedAnswer });
-            } else {
-                logger.warn('Invalid query vector, skipping cache', {
-                    requestId,
-                    vectorType: typeof queryVector,
-                    isArray: Array.isArray(queryVector)
-                });
             }
         } catch (cacheError) {
             logger.error('Cache check failed', cacheError);
-            // Tiếp tục flow bình thường nếu cache lỗi
         }
 
         if (cachedAnswer) {
             logger.info('Cache HIT', { requestId });
-
-            // Đảm bảo có chatId
             chatId = await ensureChatId(chatId, userId, question);
-
-            // Lưu cả câu hỏi và câu trả lời
             await saveMessage(chatId, 'user', question);
             await saveMessage(chatId, 'assistant', cachedAnswer, { source: "cache" });
-
-            const duration = Date.now() - startTime;
-            logger.info('Request completed from cache', { requestId, duration: `${duration}ms` });
 
             return res.status(200).json({
                 answer: cachedAnswer,
@@ -402,25 +375,15 @@ module.exports = async (req, res) => {
 
         logger.info('Cache MISS', { requestId });
 
-        // ========================================
-        // TÌM KIẾM PINECONE
-        // ========================================
-        logger.info('Searching Pinecone', { requestId });
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-        const index = pinecone.Index(PINECONE_INDEX_NAME);
-        const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-            pineconeIndex: index
-        });
 
-        const results = await vectorStore.similaritySearchVectorWithScore(queryVector, 10);
+        const results = await hybridSearch(queries, embeddings, pinecone, PINECONE_INDEX_NAME);
         const relevantDocs = results.filter(r => r[1] > SIMILARITY_THRESHOLD);
 
         logger.info('Search results', {
             requestId,
             totalResults: results.length,
-            relevantResults: relevantDocs.length,
-            threshold: SIMILARITY_THRESHOLD,
-            topScore: results[0]?.[1].toFixed(3)
+            relevantResults: relevantDocs.length
         });
 
         let context = "";
@@ -432,19 +395,7 @@ module.exports = async (req, res) => {
             sources = rankedResults.slice(0, 5).map(item => item.doc.metadata);
         } else {
             context = "Không tìm thấy thông tin cụ thể trong tài liệu.";
-            logger.warn('No relevant documents found', { requestId });
         }
-
-        // ========================================
-        // TẠO CÂU TRẢ LỜI VỚI CLAUDE
-        // ========================================
-        logger.info('Calling Claude API', { requestId });
-        const model = new ChatAnthropic({
-            modelName: MODEL_NAME,
-            apiKey: process.env.ANTHROPIC_API_KEY,
-            temperature: 0.3,
-            maxTokens: 1024
-        });
 
         const template = `
 Bạn là trợ lý AI chuyên nghiệp hỗ trợ sinh viên Trường Đại học Kỹ thuật Công nghiệp – Đại học Thái Nguyên (TNUT).
@@ -471,6 +422,7 @@ HƯỚNG DẪN TRẢ LỜI
    - Trả lời TRỰC DIỆN, không vòng vo.
    - Không nói "Dựa trên context...", hãy nói như một chuyên gia nắm rõ quy chế.
    - Dùng format danh sách, in đậm các ý chính (số tiền, điểm số, hạn chót).
+   - Các câu hỏi của sinh viên đều liên quan đến trường(ví dụ: "học phí bao nhiêu?" thì có nghĩa là mức học phí của Trường Đại học Kỹ Thuật Công Nghiệp - Đại học Thái Nguyên - TNUT) 
 
 3. XỬ LÝ CÂU HỎI THIẾU THÔNG TIN:
    - Nếu không đủ dữ liệu để khẳng định, hãy hướng dẫn sinh viên liên hệ Phòng Đào tạo hoặc Giáo vụ khoa.
@@ -484,6 +436,13 @@ HƯỚNG DẪN TRẢ LỜI
 BẮT ĐẦU TRẢ LỜI:
 `;
 
+        const model = new ChatAnthropic({
+            modelName: MODEL_NAME,
+            apiKey: process.env.ANTHROPIC_API_KEY,
+            temperature: 0.3,
+            maxTokens: 1024
+        });
+
         const chain = PromptTemplate.fromTemplate(template)
             .pipe(model)
             .pipe(new StringOutputParser());
@@ -495,37 +454,20 @@ BẮT ĐẦU TRẢ LỜI:
             chat_history: chatHistory
         });
 
-        logger.info('Answer generated', {
-            requestId,
-            answerLength: answer.length
-        });
-
-        // ========================================
-        // LƯU VÀO DATABASE & CACHE
-        // ========================================
         chatId = await ensureChatId(chatId, userId, question);
-
-        // Lưu message trước, cache sau (cache không quan trọng bằng message)
         await saveMessage(chatId, 'user', question);
         await saveMessage(chatId, 'assistant', answer, sources);
 
-        // Cache với error handling riêng
         try {
             if (queryVector && Array.isArray(queryVector) && queryVector.length > 0) {
                 await saveToSemanticCache(refinedQuestion, answer, queryVector);
-                logger.info('Answer cached successfully', { requestId });
             }
         } catch (cacheError) {
             logger.error('Failed to save to cache', cacheError);
-            // Không throw error, vì message đã lưu thành công
         }
 
         const duration = Date.now() - startTime;
-        logger.info('Request completed successfully', {
-            requestId,
-            duration: `${duration}ms`,
-            chatId
-        });
+        logger.info('Request completed', { requestId, duration: `${duration}ms` });
 
         res.status(200).json({
             answer,
@@ -537,19 +479,15 @@ BẮT ĐẦU TRẢ LỜI:
     } catch (error) {
         const duration = Date.now() - startTime;
 
-        // CHỈ log error message, KHÔNG log toàn bộ response body
         logger.error('Request failed', {
             message: error.message,
-            name: error.name,
-            code: error.code,
             requestId,
             duration: `${duration}ms`
         });
 
         res.status(500).json({
             error: "Lỗi hệ thống. Vui lòng thử lại sau.",
-            requestId,
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            requestId
         });
     }
 };

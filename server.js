@@ -203,7 +203,7 @@ app.get('/api/messages', async (req, res) => {
 
 if (require.main === module) {
     app.listen(PORT, () => {
-        console.log(`Server API đang chạy tại http://localhost:${PORT}`);
+
     });
 }
 module.exports = app;

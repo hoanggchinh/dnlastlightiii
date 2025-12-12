@@ -251,16 +251,15 @@ def main():
 
     # SUMMARY
     print("\n" + "=" * 60)
-    print(" HOÀN THÀNH INGESTION (ENHANCED VERSION)!")
+    print(" HOÀN THÀNH INGEST!")
     print("=" * 60)
     print(f" Tổng kết:")
     print(f"   • Tổng số documents: {len(documents)}")
     print(f"   • Tổng số chunks: {len(enhanced_chunks)}")
-    print(f"   • Chunk size: 800 chars")
-    print(f"   • Chunk overlap: 300 chars")
+    print(f"   • Chunk size: 2500 chars")
+    print(f"   • Chunk overlap: 500 chars")
     print(f"   • Index name: {PINECONE_INDEX_NAME}")
     print(f"   • Embedding model: {EMBEDDING_MODEL}")
-    print(f"   • Cải tiến: Smart chunking + Context metadata")
     print("=" * 60)
 
 
