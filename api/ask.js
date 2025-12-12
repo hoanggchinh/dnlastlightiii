@@ -100,20 +100,29 @@ async function rewriteQuestion(rawQuestion, history, apiKey) {
             maxTokens: 200
         });
 
-        const prompt = `Bạn là trợ lý AI thông minh. Nhiệm vụ của bạn là viết lại câu hỏi của người dùng để tìm kiếm trong tài liệu quy chế đào tạo đại học.
+        const prompt = `Bạn là chuyên gia về quy chế đào tạo TNUT. Viết lại câu hỏi để tìm kiếm trong tài liệu quy chế.
 
-Lịch sử hội thoại (Context):
+Lịch sử hội thoại:
 """
-${history || "Không có lịch sử"}
+${history || "Không có"}
 """
 
-Câu hỏi hiện tại của người dùng: "${rawQuestion}"
+Câu hỏi: "${rawQuestion}"
 
-Yêu cầu:
-1. Nếu câu hỏi thiếu chủ ngữ hoặc phụ thuộc vào lịch sử (ví dụ: "còn 6 điểm thì sao?", "thang điểm 4"), hãy DÙNG LỊCH SỬ để điền đầy đủ thông tin.
-2. Sửa lỗi chính tả, từ lóng (ví dụ: "tích gì" -> "xếp loại gì", "rớt môn" -> "học lại").
-3. Viết lại thành một câu truy vấn đầy đủ, rõ ràng, đúng thuật ngữ hành chính.
-4. CHỈ TRẢ VỀ CÂU ĐÃ VIẾT LẠI, KHÔNG GIẢI THÍCH GÌ THÊM.
+THUẬT NGỮ TNUT (quan trọng):
+- "điểm tích", "X điểm tích" (X >= 50) → "xếp loại rèn luyện", "điểm rèn luyện"
+- Điểm 50-100 = điểm rèn luyện (thang 100)
+- Điểm 1-10 = điểm thi môn học (thang 10)
+- "rớt môn", "trượt môn", "fail" → "học lại", "không đạt môn học"
+- "GPA", "điểm TB", "điểm trung bình" → "điểm trung bình tích lũy"
+- "học phí", "tiền học" → "mức học phí"
+- "thi lại", "kiểm tra lại" → "thi cải thiện điểm"
+
+YÊU CẦU:
+1. Nếu câu hỏi thiếu ngữ cảnh, DÙNG LỊCH SỬ để bổ sung
+2. Phân biệt rõ: số 1-10 là điểm thi, số 50-100 là điểm rèn luyện
+3. Chuyển thuật ngữ sinh viên → thuật ngữ quy chế
+4. CHỈ TRẢ VỀ CÂU VIẾT LẠI, KHÔNG GIẢI THÍCH
 
 Câu hỏi viết lại:`;
 
@@ -141,15 +150,15 @@ async function expandQuery(originalQuery, apiKey) {
             maxTokens: 150
         });
 
-        const prompt = `Tạo 2 biến thể của câu hỏi để tìm kiếm tốt hơn trong tài liệu quy chế.
+        const prompt = `Tạo 2 biến thể câu hỏi để tìm kiếm trong tài liệu quy chế TNUT.
 
-Câu hỏi gốc: "${originalQuery}"
+Câu hỏi: "${originalQuery}"
 
-QUY TẮC:
-1. Biến thể 1: Thêm từ khóa hành động (ví dụ: "học phí quốc phòng" → "đóng học phí quốc phòng")
-2. Biến thể 2: Dùng từ đồng nghĩa (ví dụ: "quốc phòng" → "an ninh")
+CÁCH TẠO BIẾN THỂ:
+1. Thêm từ khóa ngữ cảnh: "xếp loại rèn luyện" → "điều kiện xếp loại rèn luyện sinh viên"
+2. Dùng từ đồng nghĩa/liên quan: "điểm rèn luyện" → "điểm rèn luyện đánh giá kết quả"
 
-CHỈ TRẢ VỀ 2 DÒNG, mỗi dòng 1 biến thể, KHÔNG số thứ tự, KHÔNG giải thích:`;
+CHỈ TRẢ VỀ 2 DÒNG, KHÔNG SỐ THỨ TỰ, KHÔNG GIẢI THÍCH:`;
 
         const result = await expansionModel.invoke(prompt);
         const content = result.content ? result.content.trim() : result.toString().trim();
@@ -417,17 +426,22 @@ QUY TẮC TRẢ LỜI:
    - Nói như chuyên gia nắm rõ, KHÔNG đề cập đến nguồn thông tin
    - In đậm số liệu quan trọng (số tiền, điểm số, hạn chót)
 
-2. ĐỘ DÀI:
+2. PHÂN BIỆT ĐIỂM SỐ (RẤT QUAN TRỌNG):
+   - Điểm 1-10: Điểm thi môn học (thang 10) - VD: "đạt 5.0", "điểm A"
+   - Điểm 50-100: Điểm rèn luyện (thang 100) - VD: "đạt 90 điểm rèn luyện", "xếp loại Xuất sắc"
+   - KHÔNG nhầm lẫn giữa 2 loại điểm này
+
+3. ĐỘ DÀI:
    - Trả lời NGẮN GỌN, đi thẳng vào vấn đề
    - Danh sách: Liệt kê ĐẦY ĐỦ TẤT CẢ items từ context (VD: nếu có 8 khoa thì liệt kê cả 8)
    - Lưu ý: CHỈ 1 câu ngắn hoặc bỏ qua nếu không cần thiết
 
-3. LIÊN HỆ:
+4. LIÊN HỆ:
    - Ưu tiên thông tin chi tiết từ context: tên người, chức vụ, SĐT, email
    - VD: "Liên hệ: ThS. Nguyễn Văn A - Trưởng phòng Đào tạo - 0280.3858568 - daotao@tnut.edu.vn"
    - Chỉ nói chung "Liên hệ Phòng Đào tạo" nếu context KHÔNG có thông tin cụ thể
 
-4. CẤU TRÚC:
+5. CẤU TRÚC:
    - Câu mở đầu: Trả lời trực tiếp
    - Nội dung: Thông tin chi tiết (danh sách đầy đủ nếu có)
    - Kết thúc: Thông tin liên hệ CỤ THỂ (nếu có trong context)

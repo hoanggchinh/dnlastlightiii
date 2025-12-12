@@ -1,27 +1,78 @@
 const { pool } = require('./db');
 const { normalizeForMatching, extractKeywords } = require('./sanitize');
 
-const SIMILARITY_THRESHOLD = 0.95;
-const KEYWORD_MATCH_THRESHOLD = 0.75;
-const CACHE_TTL_MINUTES = 5;
+const SIMILARITY_THRESHOLD = 0.92;
+const KEYWORD_MATCH_THRESHOLD = 0.6;
+
+const logger = {
+    info: (message, meta = {}) => {
+        console.log(JSON.stringify({
+            level: 'info',
+            message,
+            timestamp: new Date().toISOString(),
+            ...sanitizeMeta(meta)
+        }));
+    },
+    warn: (message, meta = {}) => {
+        console.warn(JSON.stringify({
+            level: 'warn',
+            message,
+            timestamp: new Date().toISOString(),
+            ...sanitizeMeta(meta)
+        }));
+    },
+    error: (message, error = null) => {
+        const errorInfo = error ? {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } : undefined;
+
+        console.error(JSON.stringify({
+            level: 'error',
+            message,
+            timestamp: new Date().toISOString(),
+            error: errorInfo
+        }));
+    }
+};
+
+function sanitizeMeta(meta) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(meta)) {
+        if (typeof value === 'string') {
+            if (value.includes('<!DOCTYPE') || value.includes('<html')) {
+                sanitized[key] = '[HTML Content - ' + value.length + ' chars]';
+            }
+            else if (value.length > 500) {
+                sanitized[key] = value.substring(0, 500) + '... [truncated]';
+            }
+            else {
+                sanitized[key] = value;
+            }
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized;
+}
 
 async function findInSemanticCache(userQuestion, queryVector) {
     try {
         if (!queryVector || !Array.isArray(queryVector) || queryVector.length === 0) {
+            logger.warn('Invalid queryVector for cache lookup');
             return null;
         }
 
         if (!userQuestion || typeof userQuestion !== 'string') {
+            logger.warn('Invalid userQuestion for cache lookup');
             return null;
         }
 
         const vectorString = `[${queryVector.join(',')}]`;
         const normalizedQuestion = normalizeForMatching(userQuestion);
         const userKeywords = extractKeywords(userQuestion);
-
-        if (userKeywords.length < 2) {
-            return null;
-        }
 
         const query = `
             SELECT 
@@ -32,17 +83,23 @@ async function findInSemanticCache(userQuestion, queryVector) {
                 1 - (embedding <=> $1::vector) as similarity
             FROM semantic_cache
             WHERE 1 - (embedding <=> $1::vector) > $2
-            AND created_at > NOW() - INTERVAL '${CACHE_TTL_MINUTES} minutes'
             ORDER BY similarity DESC
-            LIMIT 3;
+            LIMIT 5;
         `;
 
+        const startTime = Date.now();
         const { rows } = await pool.query(query, [
             vectorString,
-            SIMILARITY_THRESHOLD
+            SIMILARITY_THRESHOLD - 0.05
         ]);
+        const duration = Date.now() - startTime;
 
         if (rows.length === 0) {
+            logger.info('Cache MISS', {
+                question: userQuestion.substring(0, 80),
+                reason: 'No similar vectors found',
+                queryTime: `${duration}ms`
+            });
             return null;
         }
 
@@ -52,49 +109,41 @@ async function findInSemanticCache(userQuestion, queryVector) {
         for (const row of rows) {
             const cachedKeywords = row.keywords || [];
 
-            let exactMatchCount = 0;
-            let partialMatchCount = 0;
+            const matchCount = userKeywords.filter(k =>
+                cachedKeywords.some(ck =>
+                    ck.includes(k) || k.includes(ck)
+                )
+            ).length;
 
-            userKeywords.forEach(userWord => {
-                const hasExactMatch = cachedKeywords.some(ck =>
-                    ck === userWord || userWord === ck
-                );
-                const hasPartialMatch = cachedKeywords.some(ck =>
-                    (ck.includes(userWord) && userWord.length > 3) ||
-                    (userWord.includes(ck) && ck.length > 3)
-                );
+            const keywordScore = matchCount / Math.max(userKeywords.length, 1);
+            const combinedScore = (row.similarity * 0.7) + (keywordScore * 0.3);
 
-                if (hasExactMatch) {
-                    exactMatchCount++;
-                } else if (hasPartialMatch) {
-                    partialMatchCount++;
-                }
-            });
-
-            const totalKeywords = Math.max(userKeywords.length, cachedKeywords.length);
-            const keywordScore = (exactMatchCount * 1.0 + partialMatchCount * 0.3) / totalKeywords;
-
-            const combinedScore = (row.similarity * 0.6) + (keywordScore * 0.4);
-
-            const requiredMinScore = 0.85;
-
-            if (combinedScore > bestScore &&
-                keywordScore >= KEYWORD_MATCH_THRESHOLD &&
-                exactMatchCount >= Math.min(2, userKeywords.length) &&
-                combinedScore >= requiredMinScore) {
+            if (combinedScore > bestScore && keywordScore >= KEYWORD_MATCH_THRESHOLD) {
                 bestScore = combinedScore;
                 bestMatch = row;
             }
         }
 
-        if (bestMatch && bestScore >= 0.85) {
+        if (bestMatch && bestScore > 0.75) {
+            logger.info('Cache HIT', {
+                similarity: `${(bestMatch.similarity * 100).toFixed(1)}%`,
+                combinedScore: `${(bestScore * 100).toFixed(1)}%`,
+                question: userQuestion.substring(0, 80),
+                queryTime: `${duration}ms`
+            });
             return bestMatch.answer;
         }
 
+        logger.info('Cache MISS', {
+            question: userQuestion.substring(0, 80),
+            reason: 'Keyword match too low',
+            bestScore: `${(bestScore * 100).toFixed(1)}%`,
+            queryTime: `${duration}ms`
+        });
         return null;
 
     } catch (error) {
-        console.error('Cache lookup failed:', error.message);
+        logger.error('Cache lookup failed', error);
         return null;
     }
 }
@@ -102,16 +151,20 @@ async function findInSemanticCache(userQuestion, queryVector) {
 async function saveToSemanticCache(question, answer, queryVector) {
     try {
         if (!queryVector || !Array.isArray(queryVector) || queryVector.length === 0) {
+            logger.warn('Invalid queryVector for cache save');
             return;
         }
 
         if (!question || typeof question !== 'string' || !answer || typeof answer !== 'string') {
+            logger.warn('Invalid question or answer for cache save');
             return;
         }
 
         const normalizedQuestion = normalizeForMatching(question);
         const keywords = extractKeywords(question);
         const vectorString = `[${queryVector.join(',')}]`;
+
+        const startTime = Date.now();
 
         const checkQuery = `
             SELECT id FROM semantic_cache 
@@ -127,51 +180,53 @@ async function saveToSemanticCache(question, answer, queryVector) {
                  WHERE question = $4`,
                 [answer, vectorString, keywords, normalizedQuestion]
             );
+
+            const duration = Date.now() - startTime;
+            logger.info('Cache updated', {
+                question: normalizedQuestion.substring(0, 80),
+                duration: `${duration}ms`
+            });
         } else {
             await pool.query(
                 `INSERT INTO semantic_cache (question, answer, embedding, keywords) 
                  VALUES ($1, $2, $3::vector, $4)`,
                 [normalizedQuestion, answer, vectorString, keywords]
             );
+
+            const duration = Date.now() - startTime;
+            logger.info('Cache saved', {
+                question: normalizedQuestion.substring(0, 80),
+                duration: `${duration}ms`
+            });
         }
 
     } catch (error) {
-        console.error('Cache save failed:', error.message);
+        logger.error('Cache save failed', error);
     }
 }
 
-async function cleanExpiredCache() {
+async function cleanOldCache(daysOld = 7) {
     try {
         const result = await pool.query(
             `DELETE FROM semantic_cache 
-             WHERE created_at < NOW() - INTERVAL '${CACHE_TTL_MINUTES} minutes'
+             WHERE created_at < NOW() - INTERVAL '${daysOld} days'
              RETURNING id`
         );
 
-        if (result.rowCount > 0) {
-            console.log(`Cleaned ${result.rowCount} expired cache entries`);
-        }
+        logger.info('Old cache cleaned', {
+            deletedCount: result.rowCount,
+            daysOld
+        });
 
         return result.rowCount;
     } catch (error) {
-        console.error('Cache cleanup failed:', error.message);
+        logger.error('Cache cleanup failed', error);
         return 0;
     }
-}
-
-function startCacheCleanupJob() {
-    const cleanupIntervalMs = CACHE_TTL_MINUTES * 60 * 1000;
-
-    setInterval(async () => {
-        await cleanExpiredCache();
-    }, cleanupIntervalMs);
-
-    console.log(`Cache cleanup job started: running every ${CACHE_TTL_MINUTES} minutes`);
 }
 
 module.exports = {
     findInSemanticCache,
     saveToSemanticCache,
-    cleanExpiredCache,
-    startCacheCleanupJob
+    cleanOldCache
 };
